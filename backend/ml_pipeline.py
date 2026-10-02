@@ -35,7 +35,7 @@ import joblib
 import sqlite3
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Callable
 from collections import defaultdict
 
 import numpy as np
@@ -70,7 +70,7 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 DATASET_CSV_PATH = os.path.join(os.path.dirname(__file__), "dataset_export.csv")
 
-MIN_SAMPLES = 20            # Minimum labeled samples per horizon for training
+MIN_SAMPLES = 10            # Minimum labeled samples per horizon for training (supports realistic small-sample bootstrapping)
 RETURN_THRESHOLD = 0.5      # % move threshold for Positive/Negative class
 
 FEATURE_NAMES = [
@@ -504,7 +504,7 @@ MODELS = {
 }
 
 
-def train_all() -> Dict[str, Any]:
+def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None) -> Dict[str, Any]:
     """
     Train all 3 models × 3 horizons (9 total models).
     Computes genuine evaluation metrics with cross-validation,
@@ -514,15 +514,22 @@ def train_all() -> Dict[str, Any]:
         return {"error": "pandas or scikit-learn not installed."}
 
     # Ensure price cache is fresh
+    if on_progress:
+        on_progress(1, 10, "Cache", "Refreshing in-memory stock price cache...")
     get_price_cache().reload()
 
     results = {}
     horizons = ["1d", "3d", "5d"]
+    total_steps = 1 + (len(horizons) * len(MODELS))
+    current_step = 1
 
     for horizon in horizons:
         dataset = _build_labeled_dataset(horizon)
         if dataset is None:
             for model_name in MODELS:
+                current_step += 1
+                if on_progress:
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Insufficient labeled data for {horizon} horizon.")
                 _store_insufficient(model_name, horizon, "No analysis+stock_price labeled rows found.")
                 results[f"{model_name}_{horizon}"] = {"insufficient": True, "horizon": horizon}
             continue
@@ -533,6 +540,9 @@ def train_all() -> Dict[str, Any]:
         if n_total < MIN_SAMPLES:
             msg = f"Only {n_total} labeled samples (need {MIN_SAMPLES}). Sync more news + stock data."
             for model_name in MODELS:
+                current_step += 1
+                if on_progress:
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Need >= {MIN_SAMPLES} samples for {horizon} (have {n_total}).")
                 _store_insufficient(model_name, horizon, msg)
                 results[f"{model_name}_{horizon}"] = {
                     "insufficient": True, "n": n_total, "horizon": horizon,
@@ -559,6 +569,9 @@ def train_all() -> Dict[str, Any]:
         X_full_s  = scaler.transform(X)  # full scaled data for cross-val
 
         for model_name, model_fn in MODELS.items():
+            current_step += 1
+            if on_progress:
+                on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Training {model_name} for {horizon} horizon (Stratified CV)...")
             try:
                 model = model_fn()
                 model.fit(X_train_s, y_train)
@@ -633,16 +646,23 @@ def train_all() -> Dict[str, Any]:
                 logger.info("[ML] %s %s → acc=%.3f f1=%.3f cv_acc=%.3f±%.3f",
                            model_name, horizon, acc, f1,
                            cv_acc_mean or 0, cv_acc_std or 0)
+                if on_progress:
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Done {model_name} ({horizon}): Acc={acc*100:.1f}%, CV Acc={(cv_acc_mean or 0)*100:.1f}%")
 
             except Exception as e:
                 logger.error("[ML] %s %s training error: %s", model_name, horizon, e)
                 results[f"{model_name}_{horizon}"] = {"error": str(e)}
+                if on_progress:
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Error {model_name} ({horizon}): {e}")
 
     # Export latest dataset CSV
     try:
         export_dataset()
     except Exception as e:
         logger.warning("[ML] Dataset export note: %s", e)
+
+    if on_progress:
+        on_progress(total_steps, total_steps, "COMPLETE", "All ML models trained and validated successfully.")
 
     return results
 

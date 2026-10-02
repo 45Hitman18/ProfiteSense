@@ -1,5 +1,7 @@
 import json
 import asyncio
+import threading
+import uuid
 from datetime import datetime
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
@@ -33,6 +35,83 @@ app.add_middleware(
 )
 
 market_aggregator = MarketAggregator()
+
+
+class MLJobTracker:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.state = {
+            "job_id": None,
+            "job_type": None,       # "collect" | "train"
+            "status": "idle",        # "idle" | "running" | "completed" | "error"
+            "progress_pct": 0,       # 0 - 100
+            "current_step": 0,
+            "total_steps": 0,
+            "current_item": "",
+            "message": "System ready.",
+            "logs": [],
+            "result": None,
+            "started_at": None,
+            "finished_at": None,
+        }
+
+    def start_job(self, job_type: str, total_steps: int = 10, initial_msg: str = "Starting..."):
+        with self._lock:
+            job_id = str(uuid.uuid4())[:8]
+            self.state = {
+                "job_id": job_id,
+                "job_type": job_type,
+                "status": "running",
+                "progress_pct": 0,
+                "current_step": 0,
+                "total_steps": total_steps,
+                "current_item": "",
+                "message": initial_msg,
+                "logs": [f"[{datetime.now().strftime('%H:%M:%S')}] Started {job_type} job (ID: {job_id})"],
+                "result": None,
+                "started_at": datetime.now().isoformat(),
+                "finished_at": None,
+            }
+            return job_id
+
+    def update_progress(self, current: int, total: int, item: str, message: str):
+        with self._lock:
+            pct = int((current / max(1, total)) * 100)
+            self.state["current_step"] = current
+            self.state["total_steps"] = total
+            self.state["current_item"] = item
+            self.state["progress_pct"] = min(100, max(0, pct))
+            self.state["message"] = message
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.state["logs"].append(f"[{time_str}] {message}")
+            if len(self.state["logs"]) > 100:
+                self.state["logs"] = self.state["logs"][-100:]
+
+    def finish_job(self, result: dict, message: str = "Completed successfully"):
+        with self._lock:
+            self.state["status"] = "completed"
+            self.state["progress_pct"] = 100
+            self.state["message"] = message
+            self.state["result"] = result
+            self.state["finished_at"] = datetime.now().isoformat()
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.state["logs"].append(f"[{time_str}] Job finished: {message}")
+
+    def error_job(self, error_msg: str):
+        with self._lock:
+            self.state["status"] = "error"
+            self.state["message"] = error_msg
+            self.state["finished_at"] = datetime.now().isoformat()
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.state["logs"].append(f"[{time_str}] ERROR: {error_msg}")
+
+    def get_status(self):
+        with self._lock:
+            return dict(self.state)
+
+
+ml_job_tracker = MLJobTracker()
+
 
 class CustomAnalysisRequest(BaseModel):
     title: str
@@ -650,78 +729,111 @@ def ml_metrics():
     return data
 
 
-@app.post("/api/ml/train")
-async def ml_train():
-    """
-    Run full ML training pipeline synchronously.
-    Returns real results immediately — trained metrics or insufficient data message.
-    """
-    try:
-        results = await asyncio.to_thread(train_all)
-    except Exception as exc:
-        return {
-            "status": "error",
-            "message": f"Training error: {str(exc)}",
-            "results": {},
-            "trained_count": 0,
-            "compliance_disclaimer": MANDATORY_DISCLAIMER,
-        }
-
-    # Summarize results for the frontend
-    trained = [k for k, v in results.items() if not v.get('insufficient') and not v.get('error')]
-    insufficient = [k for k, v in results.items() if v.get('insufficient')]
-    errors = [k for k, v in results.items() if v.get('error')]
-
-    if trained:
-        status = "trained"
-        message = f"Successfully trained {len(trained)} model(s): {', '.join(trained[:3])}{'...' if len(trained) > 3 else ''}."
-    elif insufficient:
-        first_msg = next((v.get('message', '') for v in results.values() if v.get('insufficient')), '')
-        status = "insufficient_data"
-        message = first_msg or "Not enough labeled samples. Collect prices first, then try training again."
-    elif errors:
-        status = "error"
-        message = f"Training errors: {'; '.join(str(v.get('error',''))[:60] for v in results.values() if v.get('error'))[:200]}"
-    else:
-        status = "no_results"
-        message = "No results returned. Check backend logs."
-
-    return {
-        "status": status,
-        "message": message,
-        "results": results,
-        "trained_count": len(trained),
-        "insufficient_count": len(insufficient),
-        "compliance_disclaimer": MANDATORY_DISCLAIMER,
-    }
+@app.get("/api/ml/job-status")
+def get_ml_job_status():
+    """Return active or last ML job progress, logs, and completion status."""
+    return ml_job_tracker.get_status()
 
 
 @app.post("/api/ml/collect-prices")
-async def ml_collect_prices():
+def ml_collect_prices():
     """
-    Fetch and store OHLCV history for all tracked tickers (runs synchronously).
-    Fetches both recent 90-day AND historical windows to match article dates.
+    Launch OHLCV price collection in background with live progress tracking.
+    Poll /api/ml/job-status to see live progress % and streaming logs.
     """
-    try:
-        result = await asyncio.to_thread(fetch_and_store_prices)
-    except Exception as exc:
+    current = ml_job_tracker.get_status()
+    if current["status"] == "running":
         return {
-            "status": "error",
-            "stored_rows": 0,
-            "message": f"Price collection error: {str(exc)}",
+            "status": "already_running",
+            "job_id": current["job_id"],
+            "job_type": current["job_type"],
+            "message": f"Job '{current['job_type']}' is already in progress ({current['progress_pct']}%).",
         }
-    stored = result.get('stored_rows', 0)
-    failed = result.get('tickers_failed', [])
-    processed = result.get('tickers_processed', 0)
+
+    job_id = ml_job_tracker.start_job(
+        job_type="collect",
+        total_steps=50,
+        initial_msg="Starting price collection for all tracked stocks..."
+    )
+
+    def _worker():
+        try:
+            result = fetch_and_store_prices(on_progress=ml_job_tracker.update_progress)
+            msg = result.get("message", "Price collection completed successfully.")
+            ml_job_tracker.finish_job(result, msg)
+        except Exception as exc:
+            ml_job_tracker.error_job(f"Price collection error: {str(exc)}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
     return {
-        "status": "completed",
-        "stored_rows": stored,
-        "tickers_processed": processed,
-        "tickers_failed": failed[:10],
-        "date_range": result.get('date_range', ''),
-        "article_date_range": result.get('article_date_range', ''),
-        "message": f"Collected {stored} price rows for {processed} tickers. {'Some failed: ' + ', '.join(failed[:3]) if failed else 'All tickers OK.'}",
-        "next_step": "Now click Train Models to build ML models from the collected data.",
+        "status": "started",
+        "job_id": job_id,
+        "job_type": "collect",
+        "message": "Stock price collection started.",
+    }
+
+
+@app.post("/api/ml/train")
+def ml_train():
+    """
+    Launch full ML training pipeline in background with live progress tracking.
+    Poll /api/ml/job-status to see live progress % and streaming logs.
+    """
+    current = ml_job_tracker.get_status()
+    if current["status"] == "running":
+        return {
+            "status": "already_running",
+            "job_id": current["job_id"],
+            "job_type": current["job_type"],
+            "message": f"Job '{current['job_type']}' is already in progress ({current['progress_pct']}%).",
+        }
+
+    job_id = ml_job_tracker.start_job(
+        job_type="train",
+        total_steps=10,
+        initial_msg="Initializing ML training pipeline (3 models × 3 horizons)..."
+    )
+
+    def _worker():
+        try:
+            results = train_all(on_progress=ml_job_tracker.update_progress)
+            trained = [k for k, v in results.items() if not v.get('insufficient') and not v.get('error')]
+            insufficient = [k for k, v in results.items() if v.get('insufficient')]
+            errors = [k for k, v in results.items() if v.get('error')]
+
+            if trained:
+                status = "trained"
+                msg = f"Successfully trained {len(trained)} models ({', '.join(trained[:3])}{'...' if len(trained) > 3 else ''})."
+            elif insufficient:
+                status = "insufficient_data"
+                first_msg = next((v.get('message', '') for v in results.values() if v.get('insufficient')), '')
+                msg = first_msg or "Not enough labeled samples for current threshold."
+            elif errors:
+                status = "error"
+                msg = f"Training errors: {'; '.join(str(v.get('error',''))[:60] for v in results.values() if v.get('error'))[:200]}"
+            else:
+                status = "completed"
+                msg = "Training finished."
+
+            res_summary = {
+                "status": status,
+                "message": msg,
+                "results": results,
+                "trained_count": len(trained),
+                "insufficient_count": len(insufficient),
+            }
+            ml_job_tracker.finish_job(res_summary, msg)
+        except Exception as exc:
+            ml_job_tracker.error_job(f"Training error: {str(exc)}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "job_type": "train",
+        "message": "ML model training pipeline started.",
     }
 
 

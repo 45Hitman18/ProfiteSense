@@ -1,12 +1,12 @@
 """
 stock_collector.py — Fetch and store OHLCV historical data via yfinance.
 Called during /api/ml/collect-prices or on demand.
-Covers BOTH recent 90-day data AND the historical period of articles in the DB
+Covers BOTH recent 90-day data AND historical clusters of articles in the DB
 so the ML labeling pipeline can match articles to actual future price returns.
 """
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 logger = logging.getLogger("stock_collector")
 
@@ -32,8 +32,18 @@ def get_tracked_tickers() -> List[str]:
     return [r[0] for r in rows if r[0]]
 
 
-def _get_article_date_range() -> tuple:
-    """Return (earliest_article_date, latest_article_date) from the articles table."""
+def _get_article_windows(period_days: int = DEFAULT_PERIOD_DAYS) -> List[tuple]:
+    """
+    Find distinct time windows needed for price collection:
+    1. Recent window (past period_days up to tomorrow)
+    2. Discrete historical windows around article publication dates (e.g., April 2024, Oct 2016)
+       padded with 10 days after for 5-day horizon labels.
+    """
+    now = datetime.now()
+    recent_start = (now - timedelta(days=period_days)).strftime("%Y-%m-%d")
+    recent_end = (now + timedelta(days=2)).strftime("%Y-%m-%d")
+    windows = [(recent_start, recent_end, "recent")]
+
     conn = get_connection()
     rows = conn.execute("""
         SELECT a.published_at
@@ -44,26 +54,35 @@ def _get_article_date_range() -> tuple:
     """).fetchall()
     conn.close()
 
-    dates = []
+    months = set()
     for r in rows:
         raw = str(r[0])
-        # Handle formats: '2024-04-23T08:08:59', '20261001T112705', '2024-04-23', '20261001'
         try:
             if 'T' in raw:
                 d = raw.split('T')[0]
             else:
                 d = raw[:10]
-            # Handle compact format '20261001' -> '2026-10-01'
             if len(d) == 8 and '-' not in d:
                 d = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
             if len(d) == 10:
-                dates.append(d)
+                months.add(d[:7])  # e.g., '2024-04', '2016-10'
         except Exception:
             continue
 
-    if not dates:
-        return None, None
-    return min(dates), max(dates)
+    for ym in sorted(months):
+        try:
+            y, m = map(int, ym.split('-'))
+            month_start = datetime(y, m, 1)
+            # month end: approx 35 days later
+            month_end = (month_start + timedelta(days=35)).replace(day=1) + timedelta(days=14)
+            start_str = (month_start - timedelta(days=5)).strftime("%Y-%m-%d")
+            end_str = month_end.strftime("%Y-%m-%d")
+            if end_str < recent_start:
+                windows.append((start_str, end_str, f"historical_{ym}"))
+        except Exception:
+            continue
+
+    return windows
 
 
 def _fetch_ticker(ticker: str, start: str, end: str, conn) -> int:
@@ -71,7 +90,7 @@ def _fetch_ticker(ticker: str, start: str, end: str, conn) -> int:
     try:
         data = yf.download(ticker, start=start, end=end,
                            auto_adjust=True, progress=False, threads=False)
-        if data.empty:
+        if data is None or data.empty:
             logger.warning("No data for %s (%s to %s)", ticker, start, end)
             return 0
 
@@ -106,16 +125,20 @@ def _fetch_ticker(ticker: str, start: str, end: str, conn) -> int:
         return 0
 
 
-def fetch_and_store_prices(tickers: list = None, period_days: int = DEFAULT_PERIOD_DAYS) -> dict:
+def fetch_and_store_prices(
+    tickers: list = None,
+    period_days: int = DEFAULT_PERIOD_DAYS,
+    on_progress: Optional[Callable[[int, int, str, str], None]] = None
+) -> dict:
     """
     Download OHLCV from yfinance for all tracked tickers.
 
-    Fetches TWO windows:
+    Fetches targeted windows:
     1. Recent 90-day window (for current/future labeling)
-    2. Historical window matching article publication dates (for retrospective labeling)
+    2. Discrete historical windows matching article publication dates
+       (e.g., April 2024, Oct 2016)
 
-    This ensures the ML pipeline can always find 'future' prices relative to
-    any article in the database.
+    Calls on_progress(current_step, total_steps, ticker, message) if provided.
     """
     if not HAS_YF:
         return {"error": "yfinance not installed"}
@@ -126,31 +149,7 @@ def fetch_and_store_prices(tickers: list = None, period_days: int = DEFAULT_PERI
     if not tickers:
         return {"stored_rows": 0, "tickers": [], "message": "No tickers with analysis data found."}
 
-    # Window 1: recent 90 days through tomorrow (for future labels on recent articles)
-    recent_start = (datetime.now() - timedelta(days=period_days)).strftime("%Y-%m-%d")
-    recent_end   = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
-
-    # Window 2: historical — cover the article date range + 10 extra days for future returns
-    article_min, article_max = _get_article_date_range()
-    fetch_windows = [(recent_start, recent_end, "recent")]
-
-    if article_min:
-        # Parse and extend: start 5 days before earliest article, end 10 days after latest
-        try:
-            art_start_dt = datetime.strptime(article_min, "%Y-%m-%d") - timedelta(days=5)
-            art_end_dt   = datetime.strptime(article_max, "%Y-%m-%d") + timedelta(days=10)
-            hist_start   = art_start_dt.strftime("%Y-%m-%d")
-            hist_end     = art_end_dt.strftime("%Y-%m-%d")
-            # Only add historical window if it doesn't overlap with recent (gap > 30 days)
-            if hist_end < recent_start:
-                fetch_windows.append((hist_start, hist_end, "historical"))
-                logger.info("Adding historical price window: %s to %s", hist_start, hist_end)
-            else:
-                # Merge: start from historical, end at tomorrow
-                fetch_windows = [(hist_start, recent_end, "combined")]
-                logger.info("Combined price window: %s to %s", hist_start, recent_end)
-        except Exception as e:
-            logger.warning("Failed to compute historical window: %s", e)
+    fetch_windows = _get_article_windows(period_days)
 
     # Always include market indices
     index_tickers = ["^NSEI", "SPY", "^BSESN"]
@@ -161,10 +160,23 @@ def fetch_and_store_prices(tickers: list = None, period_days: int = DEFAULT_PERI
     failed = []
     date_ranges_fetched = []
 
+    total_tasks = len(fetch_windows) * len(all_tickers)
+    current_task = 0
+
     for (start, end, window_label) in fetch_windows:
         logger.info("Fetching %s window: %s to %s (%d tickers)", window_label, start, end, len(all_tickers))
         date_ranges_fetched.append(f"{start} to {end} [{window_label}]")
+
         for ticker in all_tickers:
+            current_task += 1
+            if on_progress:
+                on_progress(
+                    current_task,
+                    total_tasks,
+                    ticker,
+                    f"Fetching {ticker} for {window_label} ({current_task}/{total_tasks})..."
+                )
+
             rows = _fetch_ticker(ticker, start, end, conn)
             if rows == 0 and ticker not in index_tickers:
                 failed.append(f"{ticker}({window_label})")
@@ -173,11 +185,16 @@ def fetch_and_store_prices(tickers: list = None, period_days: int = DEFAULT_PERI
     conn.commit()
     conn.close()
 
+    if on_progress:
+        on_progress(total_tasks, total_tasks, "COMPLETE", f"Finished! Stored {total_rows} total rows.")
+
     return {
+        "status": "completed",
         "stored_rows": total_rows,
         "tickers_processed": len(all_tickers) - len([f for f in failed if "recent" in f]),
         "tickers_failed": list(set(failed)),
         "date_range": " | ".join(date_ranges_fetched),
-        "article_date_range": f"{article_min} to {article_max}" if article_min else "no articles",
+        "windows_count": len(fetch_windows),
         "timestamp": datetime.now().isoformat(),
+        "message": f"Successfully collected {total_rows} price rows across {len(fetch_windows)} time windows for {len(all_tickers)} tickers.",
     }

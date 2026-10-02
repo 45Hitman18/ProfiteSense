@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Brain, RefreshCw, Database, TrendingUp, CheckCircle,
   AlertTriangle, BarChart3, Layers, Cpu, Target, ShieldAlert, Play, Download,
-  XCircle, Clock, Info
+  XCircle, Clock, Info, ChevronDown, ChevronUp, Terminal
 } from 'lucide-react';
 
 const MANDATORY_DISCLAIMER = "AI/model estimate — not investment advice.";
@@ -34,12 +34,12 @@ function Toast({ toast, onClose }) {
   return (
     <div style={{
       position: 'fixed',
-      top: '80px',      /* below sticky header */
+      top: '80px',
       right: '20px',
-      zIndex: 10000,    /* above header (50), modal (100), overlay (9998) */
+      zIndex: 10000,
       padding: '14px 18px',
       borderRadius: '8px',
-      maxWidth: '400px',
+      maxWidth: '420px',
       minWidth: '280px',
       background: c.bg,
       border: `2px solid ${c.border}`,
@@ -60,54 +60,238 @@ function Toast({ toast, onClose }) {
       </div>
       <button
         onClick={onClose}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', padding: '0 0 0 8px', fontSize: '1rem', lineHeight: 1 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', padding: '0 0 0 8px', fontSize: '1.1rem', lineHeight: 1 }}
       >×</button>
     </div>
   );
 }
 
-// Progress overlay for long-running tasks
-function ProgressOverlay({ visible, label, subLabel }) {
-  if (!visible) return null;
+// Live Process & Logs Panel Component
+function MLProcessPanel({ job, onDismiss, onRefresh }) {
+  const [showLogs, setShowLogs] = useState(true);
+  const logEndRef = useRef(null);
+
+  useEffect(() => {
+    if (showLogs && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [job?.logs?.length, showLogs]);
+
+  if (!job || job.status === 'idle') return null;
+
+  const isRunning = job.status === 'running';
+  const isCompleted = job.status === 'completed';
+  const isError = job.status === 'error';
+  const jobTitle = job.job_type === 'collect' ? 'Stock Price Collection Pipeline' : 'ML Model Training Pipeline';
+
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 9998,
-      background: 'rgba(23,23,23,0.72)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+      border: isRunning ? '2px solid #3b82f6' : (isCompleted ? '2px solid #10b981' : '2px solid #ef4444'),
+      borderRadius: '12px',
+      padding: '20px 24px',
+      marginBottom: '24px',
+      boxShadow: isRunning ? '0 12px 32px rgba(59, 130, 246, 0.25)' : '0 8px 24px rgba(0,0,0,0.3)',
+      color: '#f8fafc',
+      animation: 'toastSlideIn 0.3s ease',
     }}>
+      {/* Top row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {isRunning && <Clock size={22} className="spin" color="#60a5fa" />}
+          {isCompleted && <CheckCircle size={22} color="#34d399" />}
+          {isError && <XCircle size={22} color="#f87171" />}
+          <div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#f8fafc' }}>
+              {jobTitle}
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+              Job ID: <span style={{ fontFamily: 'monospace', color: '#cbd5e1' }}>{job.job_id || '—'}</span>
+              {job.started_at && ` • Started at ${job.started_at.slice(11, 19)}`}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{
+            fontSize: '0.74rem',
+            fontWeight: '800',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            padding: '5px 12px',
+            borderRadius: '20px',
+            background: isRunning ? 'rgba(59,130,246,0.2)' : (isCompleted ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'),
+            color: isRunning ? '#93c5fd' : (isCompleted ? '#6ee7b7' : '#fca5a5'),
+            border: `1px solid ${isRunning ? '#3b82f6' : (isCompleted ? '#10b981' : '#ef4444')}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            {isRunning && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#60a5fa', animation: 'mlPulse 1.2s infinite' }} />}
+            {isRunning ? `PROCESSING (${job.progress_pct}%)` : (isCompleted ? 'COMPLETED' : 'FAILED')}
+          </span>
+
+          {!isRunning && (
+            <button
+              onClick={onDismiss}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#cbd5e1',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress Bar */}
       <div style={{
-        background: '#FFFDF8',
-        border: '2px solid #171717',
-        borderRadius: '8px',
-        padding: '40px 48px',
-        textAlign: 'center',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
-        maxWidth: '360px',
+        width: '100%',
+        height: '10px',
+        background: '#090d16',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,0.1)',
+        marginBottom: '12px',
+        position: 'relative',
       }}>
         <div style={{
-          width: '52px', height: '52px', borderRadius: '50%',
-          border: '4px solid #e5e0d8',
-          borderTopColor: '#A71919',
-          animation: 'mlSpin 0.8s linear infinite',
-          margin: '0 auto 20px',
+          width: `${Math.min(100, Math.max(3, job.progress_pct))}%`,
+          height: '100%',
+          background: isError ? '#ef4444' : (isCompleted ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #3b82f6, #a855f7)'),
+          transition: 'width 0.4s ease',
+          borderRadius: '6px',
         }} />
-        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#171717', fontFamily: 'var(--font-serif)', marginBottom: '8px' }}>{label}</div>
-        <div style={{ fontSize: '0.82rem', color: '#59544C', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>{subLabel}</div>
       </div>
+
+      {/* Current Step Description */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', fontSize: '0.84rem' }}>
+        <div style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontWeight: '700', color: '#93c5fd' }}>{job.current_item || 'Status'}:</span>
+          <span>{job.message}</span>
+        </div>
+        <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+          {job.current_step > 0 && `${job.current_step} / ${job.total_steps} tasks`}
+        </div>
+      </div>
+
+      {/* Streaming Console Logs */}
+      <div style={{ marginTop: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Terminal size={14} color="#60a5fa" />
+            Live Console Execution Logs ({job.logs?.length || 0} lines)
+          </span>
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            style={{ background: 'none', border: 'none', color: '#60a5fa', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
+            {showLogs ? <><ChevronUp size={14} /> Collapse</> : <><ChevronDown size={14} /> View Logs</>}
+          </button>
+        </div>
+
+        {showLogs && (
+          <div style={{
+            background: '#020617',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            maxHeight: '160px',
+            overflowY: 'auto',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            fontSize: '0.76rem',
+            lineHeight: 1.6,
+          }}>
+            {job.logs && job.logs.length > 0 ? (
+              job.logs.map((line, idx) => {
+                let color = '#94a3b8';
+                if (line.includes('ERROR') || line.includes('Failed')) color = '#f87171';
+                else if (line.includes('Done') || line.includes('Finished') || line.includes('Stored') || line.includes('Successfully')) color = '#34d399';
+                else if (line.includes('Training') || line.includes('Fetching')) color = '#60a5fa';
+                return (
+                  <div key={idx} style={{ color }}>
+                    {line}
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ color: '#64748b' }}>Awaiting initial logs...</div>
+            )}
+            <div ref={logEndRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Finished Summary Callout */}
+      {isCompleted && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          background: 'rgba(16,185,129,0.12)',
+          border: '1px solid rgba(16,185,129,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}>
+          <div style={{ fontSize: '0.84rem', color: '#6ee7b7', fontWeight: '600' }}>
+            ✓ {job.message}
+          </div>
+          <button
+            onClick={onRefresh}
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.78rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', background: '#064e3b', color: '#a7f3d0', borderColor: '#059669' }}
+          >
+            <RefreshCw size={13} /> Refresh Model Tables
+          </button>
+        </div>
+      )}
+
+      {/* Error Callout */}
+      {isError && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          background: 'rgba(239,68,68,0.12)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}>
+          <div style={{ fontSize: '0.84rem', color: '#fca5a5' }}>
+            ✗ {job.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function ModelAnalyticsView() {
-  const [status, setStatus]         = useState(null);
-  const [metrics, setMetrics]       = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [collecting, setCollecting] = useState(false);
-  const [training, setTraining]     = useState(false);
-  const [toast, setToast]           = useState(null);
+  const [status, setStatus]               = useState(null);
+  const [metrics, setMetrics]             = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [toast, setToast]                 = useState(null);
   const [activeHorizon, setActiveHorizon] = useState("1d");
   const [activeModel, setActiveModel]     = useState("RandomForest");
-  const toastTimer = useRef(null);
+  
+  // Real-time job execution state
+  const [job, setJob]                     = useState(null);
+  const [jobDismissed, setJobDismissed]   = useState(false);
+  const pollingRef                        = useRef(null);
+  const toastTimer                        = useRef(null);
 
   const showToast = (type, title, message, duration = 6000) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -120,61 +304,98 @@ export default function ModelAnalyticsView() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [sRes, mRes] = await Promise.all([
+      const [sRes, mRes, jRes] = await Promise.all([
         fetch('/api/ml/status').then(r => r.json()),
         fetch('/api/ml/metrics').then(r => r.json()),
+        fetch('/api/ml/job-status').then(r => r.json()),
       ]);
       setStatus(sRes);
       setMetrics(mRes);
+      if (jRes) {
+        setJob(jRes);
+        if (jRes.status === 'running') {
+          startPolling();
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch ML analytics:", e);
     }
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  const startPolling = () => {
+    if (pollingRef.current) return;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const jRes = await fetch('/api/ml/job-status').then(r => r.json());
+        setJob(jRes);
+        if (jRes.status === 'completed') {
+          stopPolling();
+          showToast('success', `${jRes.job_type === 'collect' ? 'Price Collection' : 'ML Training'} Complete!`, jRes.message);
+          // Refresh background metrics and stats
+          const [sRes, mRes] = await Promise.all([
+            fetch('/api/ml/status').then(r => r.json()),
+            fetch('/api/ml/metrics').then(r => r.json()),
+          ]);
+          setStatus(sRes);
+          setMetrics(mRes);
+        } else if (jRes.status === 'error') {
+          stopPolling();
+          showToast('error', 'Execution Error', jRes.message);
+        }
+      } catch (err) {
+        console.error("Job status polling error:", err);
+      }
+    }, 600);
+  };
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    fetchAll();
+    return () => stopPolling();
+  }, []);
 
   const handleCollect = async () => {
-    setCollecting(true);
-    showToast('info', 'Collecting Prices...', 'Fetching 90-day OHLCV data for all tracked stocks. This takes 30–60 seconds. Please wait.', 0);
+    setJobDismissed(false);
     try {
       const res = await fetch('/api/ml/collect-prices', { method: 'POST' });
       const data = await res.json();
-      if (data.stored_rows > 0 || data.status === 'completed') {
-        showToast('success', 'Price Collection Complete!',
-          `${data.message} Date range: ${data.date_range}.`);
+      if (data.status === 'already_running') {
+        showToast('warning', 'Task in Progress', data.message);
+        startPolling();
       } else {
-        showToast('warning', 'Collection Finished', data.message || 'No new rows stored.');
+        showToast('info', 'Collecting Prices...', 'Price collection initiated. Watch real-time progress below.');
+        startPolling();
       }
     } catch (e) {
-      showToast('error', 'Collection Failed', `Network error: ${e.message}`);
+      showToast('error', 'Request Failed', `Network error: ${e.message}`);
     }
-    setCollecting(false);
-    await fetchAll();
   };
 
   const handleTrain = async () => {
-    setTraining(true);
-    showToast('info', 'Training Models...', 'Running ML pipeline: 3 models × 3 horizons = 9 total. This takes 15–60 seconds. Please wait.', 0);
+    setJobDismissed(false);
     try {
       const res = await fetch('/api/ml/train', { method: 'POST' });
       const data = await res.json();
-
-      if (data.status === 'trained') {
-        showToast('success', 'Training Complete!',
-          `${data.trained_count} model(s) trained successfully. ${data.message}`);
-      } else if (data.status === 'insufficient_data') {
-        showToast('warning', 'Insufficient Labeled Data',
-          `${data.message}\n\nTo fix: Click "Collect Prices" first, then try training again after more articles are synced.`);
+      if (data.status === 'already_running') {
+        showToast('warning', 'Task in Progress', data.message);
+        startPolling();
       } else {
-        showToast('error', 'Training Error', data.message || 'Unknown error during training.');
+        showToast('info', 'Training ML Models...', 'ML pipeline training initiated. Watch real-time progress below.');
+        startPolling();
       }
     } catch (e) {
-      showToast('error', 'Training Failed', `Network error: ${e.message}`);
+      showToast('error', 'Request Failed', `Network error: ${e.message}`);
     }
-    setTraining(false);
-    await fetchAll();
   };
+
+  const isJobRunning = job?.status === 'running';
 
   // Get metric for selected model + horizon
   const getMetric = (model, horizon) =>
@@ -185,16 +406,6 @@ export default function ModelAnalyticsView() {
   return (
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
-      <ProgressOverlay
-        visible={collecting}
-        label="Collecting Stock Prices..."
-        subLabel="Fetching 90-day OHLCV history for all tracked tickers via Yahoo Finance. Please wait."
-      />
-      <ProgressOverlay
-        visible={training}
-        label="Training ML Models..."
-        subLabel="Running 3 models × 3 horizons (9 total) with cross-validation. Please wait 15–60 seconds."
-      />
 
       {/* Header */}
       <div className="glass-card" style={{ padding: '20px 24px', marginBottom: '20px' }}>
@@ -206,7 +417,7 @@ export default function ModelAnalyticsView() {
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '2px' }}>ML Model Analytics</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                3 Models × 3 Horizons • 11-Feature Pipeline • Real Train/Test Split
+                3 Models × 3 Horizons • 11-Feature Pipeline • Real Train/Test Split & Cross-Validation
               </p>
             </div>
           </div>
@@ -222,25 +433,34 @@ export default function ModelAnalyticsView() {
             <button
               className="btn btn-secondary btn-sm"
               onClick={handleCollect}
-              disabled={collecting || training}
+              disabled={isJobRunning}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              {collecting ? <><Clock size={14} className="spin" /> Collecting...</> : <><Database size={14} /> Collect Prices</>}
+              {isJobRunning && job?.job_type === 'collect' ? <><Clock size={14} className="spin" /> Collecting...</> : <><Database size={14} /> Collect Prices</>}
             </button>
             <button
               className="btn btn-primary btn-sm"
               onClick={handleTrain}
-              disabled={training || collecting}
+              disabled={isJobRunning}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,#7c3aed,#3b82f6)' }}
             >
-              {training ? <><Clock size={14} className="spin" /> Training...</> : <><Play size={14} /> Train Models</>}
+              {isJobRunning && job?.job_type === 'train' ? <><Clock size={14} className="spin" /> Training...</> : <><Play size={14} /> Train Models</>}
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={fetchAll} disabled={loading}>
+            <button className="btn btn-secondary btn-sm" onClick={fetchAll} disabled={loading || isJobRunning}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
             </button>
           </div>
         </div>
       </div>
+
+      {/* Live Process & Execution Panel */}
+      {!jobDismissed && (
+        <MLProcessPanel
+          job={job}
+          onDismiss={() => setJobDismissed(true)}
+          onRefresh={fetchAll}
+        />
+      )}
 
       {/* System Status Cards */}
       {status && (
@@ -280,7 +500,7 @@ export default function ModelAnalyticsView() {
         </div>
       )}
 
-      {/* Insufficient data banner */}
+      {/* Insufficient data banner if not enough samples */}
       {metrics && !metrics.has_sufficient_data && (
         <div style={{
           padding: '20px 24px', borderRadius: '12px', marginBottom: '20px',
@@ -295,8 +515,8 @@ export default function ModelAnalyticsView() {
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
               The ML system needs articles whose stock price <em>outcome</em> (1d/3d/5d return after publication)
               can be verified from stored price data.<br />
-              <strong>Step 1:</strong> Click <strong>Collect Prices</strong> — this downloads the latest 90-day OHLCV data.<br />
-              <strong>Step 2:</strong> Click <strong>Train Models</strong> — labeled samples are built automatically from overlapping article + price dates.<br />
+              <strong>Step 1:</strong> Click <strong>Collect Prices</strong> — this downloads OHLCV data matching article dates.<br />
+              <strong>Step 2:</strong> Click <strong>Train Models</strong> — labeled samples are built automatically.<br />
               Minimum {metrics.min_samples_required} labeled samples required per horizon.
             </p>
           </div>
@@ -579,6 +799,7 @@ export default function ModelAnalyticsView() {
       <style>{`
         @keyframes toastSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes mlSpin { to { transform: rotate(360deg); } }
+        @keyframes mlPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } }
         .spin { animation: mlSpin 0.8s linear infinite; }
       `}</style>
     </div>
