@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Brain, RefreshCw, Database, TrendingUp, CheckCircle,
-  AlertTriangle, BarChart3, Layers, Cpu, Target, ShieldAlert, Play, Download
+  AlertTriangle, BarChart3, Layers, Cpu, Target, ShieldAlert, Play, Download,
+  XCircle, Clock, Info
 } from 'lucide-react';
 
 const MANDATORY_DISCLAIMER = "AI/model estimate — not investment advice.";
@@ -13,29 +14,93 @@ const MODEL_COLORS = {
   "GradientBoosting":   "#f59e0b",
 };
 const FEATURE_LABELS = [
-  "Sentiment Score",
-  "Sentiment Polarity",
-  "Sentiment Strength",
-  "Event Type",
-  "Sector",
-  "Recent 1D Return %",
-  "Historical Volatility",
-  "Relative Volume",
-  "Market Trend (5D)",
-  "Category Past Reaction",
-  "News Recency",
+  "Sentiment Score", "Sentiment Polarity", "Sentiment Strength", "Event Type",
+  "Sector", "Recent 1D Return %", "Historical Volatility", "Relative Volume",
+  "Market Trend (5D)", "Category Past Reaction", "News Recency",
 ];
 const CLASS_LABELS = ["Negative", "Neutral", "Positive"];
 const CLASS_COLORS = { Negative: "#f43f5e", Neutral: "#f59e0b", Positive: "#10b981" };
 
+// Toast notification component
+function Toast({ toast, onClose }) {
+  if (!toast) return null;
+  const colors = {
+    success: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.4)', icon: <CheckCircle size={16} color="#10b981" />, text: '#6ee7b7' },
+    error:   { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.4)',  icon: <XCircle size={16} color="#f87171" />,    text: '#fca5a5' },
+    warning: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)', icon: <AlertTriangle size={16} color="#f59e0b" />, text: '#fde68a' },
+    info:    { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)', icon: <Info size={16} color="#60a5fa" />,        text: '#93c5fd' },
+  };
+  const c = colors[toast.type] || colors.info;
+  return (
+    <div style={{
+      position: 'fixed', top: '24px', right: '24px', zIndex: 9999,
+      padding: '14px 18px', borderRadius: '12px', maxWidth: '420px',
+      background: c.bg, border: `1px solid ${c.border}`,
+      display: 'flex', alignItems: 'flex-start', gap: '10px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      animation: 'slideIn 0.3s ease'
+    }}>
+      <div style={{ flexShrink: 0, marginTop: '1px' }}>{c.icon}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: '700', color: c.text, fontSize: '0.88rem', marginBottom: '3px' }}>
+          {toast.title}
+        </div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          {toast.message}
+        </div>
+      </div>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 0 0 8px' }}>✕</button>
+    </div>
+  );
+}
+
+// Progress overlay for long-running tasks
+function ProgressOverlay({ visible, label, subLabel }) {
+  if (!visible) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9998,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: 'var(--bg-secondary)', borderRadius: '16px',
+        padding: '40px 48px', textAlign: 'center',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.5)'
+      }}>
+        <div style={{
+          width: '56px', height: '56px', borderRadius: '50%',
+          border: '4px solid rgba(124,58,237,0.2)',
+          borderTopColor: '#7c3aed',
+          animation: 'spin 0.8s linear infinite',
+          margin: '0 auto 20px'
+        }} />
+        <div style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '8px' }}>{label}</div>
+        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{subLabel}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function ModelAnalyticsView() {
-  const [status, setStatus]       = useState(null);
-  const [metrics, setMetrics]     = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [status, setStatus]         = useState(null);
+  const [metrics, setMetrics]       = useState(null);
+  const [loading, setLoading]       = useState(true);
   const [collecting, setCollecting] = useState(false);
-  const [training, setTraining]   = useState(false);
+  const [training, setTraining]     = useState(false);
+  const [toast, setToast]           = useState(null);
   const [activeHorizon, setActiveHorizon] = useState("1d");
   const [activeModel, setActiveModel]     = useState("RandomForest");
+  const toastTimer = useRef(null);
+
+  const showToast = (type, title, message, duration = 6000) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ type, title, message });
+    if (duration > 0) {
+      toastTimer.current = setTimeout(() => setToast(null), duration);
+    }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -56,25 +121,44 @@ export default function ModelAnalyticsView() {
 
   const handleCollect = async () => {
     setCollecting(true);
-    await fetch('/api/ml/collect-prices', { method: 'POST' });
-    setTimeout(() => { setCollecting(false); fetchAll(); }, 3000);
+    showToast('info', 'Collecting Prices...', 'Fetching 90-day OHLCV data for all tracked stocks. This takes 30–60 seconds. Please wait.', 0);
+    try {
+      const res = await fetch('/api/ml/collect-prices', { method: 'POST' });
+      const data = await res.json();
+      if (data.stored_rows > 0 || data.status === 'completed') {
+        showToast('success', 'Price Collection Complete!',
+          `${data.message} Date range: ${data.date_range}.`);
+      } else {
+        showToast('warning', 'Collection Finished', data.message || 'No new rows stored.');
+      }
+    } catch (e) {
+      showToast('error', 'Collection Failed', `Network error: ${e.message}`);
+    }
+    setCollecting(false);
+    await fetchAll();
   };
 
   const handleTrain = async () => {
     setTraining(true);
-    await fetch('/api/ml/train', { method: 'POST' });
-    // Poll for 45s
-    let polls = 0;
-    const poll = setInterval(async () => {
-      polls++;
-      const m = await fetch('/api/ml/metrics').then(r => r.json());
-      setMetrics(m);
-      if (m.has_sufficient_data || polls > 9) {
-        clearInterval(poll);
-        setTraining(false);
-        fetchAll();
+    showToast('info', 'Training Models...', 'Running ML pipeline: 3 models × 3 horizons = 9 total. This takes 15–60 seconds. Please wait.', 0);
+    try {
+      const res = await fetch('/api/ml/train', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.status === 'trained') {
+        showToast('success', 'Training Complete!',
+          `${data.trained_count} model(s) trained successfully. ${data.message}`);
+      } else if (data.status === 'insufficient_data') {
+        showToast('warning', 'Insufficient Labeled Data',
+          `${data.message}\n\nTo fix: Click "Collect Prices" first, then try training again after more articles are synced.`);
+      } else {
+        showToast('error', 'Training Error', data.message || 'Unknown error during training.');
       }
-    }, 5000);
+    } catch (e) {
+      showToast('error', 'Training Failed', `Network error: ${e.message}`);
+    }
+    setTraining(false);
+    await fetchAll();
   };
 
   // Get metric for selected model + horizon
@@ -85,6 +169,18 @@ export default function ModelAnalyticsView() {
 
   return (
     <div>
+      <Toast toast={toast} onClose={() => setToast(null)} />
+      <ProgressOverlay
+        visible={collecting}
+        label="Collecting Stock Prices..."
+        subLabel="Fetching 90-day OHLCV history for all tracked tickers via Yahoo Finance. Please wait."
+      />
+      <ProgressOverlay
+        visible={training}
+        label="Training ML Models..."
+        subLabel="Running 3 models × 3 horizons (9 total) with cross-validation. Please wait 15–60 seconds."
+      />
+
       {/* Header */}
       <div className="glass-card" style={{ padding: '20px 24px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
@@ -105,19 +201,16 @@ export default function ModelAnalyticsView() {
               download="market_news_ml_dataset.csv"
               className="btn btn-secondary btn-sm"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
-              title="Download full ML dataset (articles, sentiment, indicators, and future stock return labels)"
             >
-              <Download size={14} />
-              Dataset (CSV)
+              <Download size={14} /> Dataset (CSV)
             </a>
             <button
               className="btn btn-secondary btn-sm"
               onClick={handleCollect}
-              disabled={collecting}
+              disabled={collecting || training}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Database size={14} />
-              {collecting ? 'Collecting...' : 'Collect Prices'}
+              {collecting ? <><Clock size={14} className="spin" /> Collecting...</> : <><Database size={14} /> Collect Prices</>}
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -125,8 +218,7 @@ export default function ModelAnalyticsView() {
               disabled={training || collecting}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,#7c3aed,#3b82f6)' }}
             >
-              <Play size={14} />
-              {training ? 'Training...' : 'Train Models'}
+              {training ? <><Clock size={14} className="spin" /> Training...</> : <><Play size={14} /> Train Models</>}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={fetchAll} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
@@ -139,10 +231,10 @@ export default function ModelAnalyticsView() {
       {status && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px', marginBottom: '20px' }}>
           {[
-            { label: 'Analysis Rows',   value: status.analysis_rows,    icon: <Layers size={16} color="#60a5fa" /> },
-            { label: 'Price Rows',      value: status.stock_price_rows,  icon: <BarChart3 size={16} color="#34d399" /> },
-            { label: 'Tickers Tracked', value: status.unique_tickers,    icon: <Target size={16} color="#f59e0b" /> },
-            { label: 'Trained Models',  value: status.trained_models,    icon: <Cpu size={16} color="#a78bfa" /> },
+            { label: 'Analysis Rows',   value: status.analysis_rows,   icon: <Layers size={16} color="#60a5fa" /> },
+            { label: 'Price Rows',      value: status.stock_price_rows, icon: <BarChart3 size={16} color="#34d399" /> },
+            { label: 'Tickers Tracked', value: status.unique_tickers,   icon: <Target size={16} color="#f59e0b" /> },
+            { label: 'Trained Models',  value: status.trained_models,   icon: <Cpu size={16} color="#a78bfa" /> },
             { label: 'Dataset Rows',    value: metrics?.dataset_csv_rows != null ? metrics.dataset_csv_rows : '—', icon: <Download size={16} color="#38bdf8" /> },
           ].map(({ label, value, icon }) => (
             <div key={label} className="glass-card" style={{ padding: '14px 16px' }}>
@@ -183,14 +275,14 @@ export default function ModelAnalyticsView() {
           <AlertTriangle size={20} color="#f87171" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
             <p style={{ fontWeight: '700', color: '#f87171', marginBottom: '4px' }}>
-              Model requires more historical data for reliable training.
+              Model requires more labeled data.
             </p>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-              Steps to enable training:<br/>
-              <strong>1.</strong> Sync news articles (Live Terminal → Sync News).<br/>
-              <strong>2.</strong> Click <strong>Collect Prices</strong> to download 90-day OHLCV history for all tracked stocks.<br/>
-              <strong>3.</strong> Click <strong>Train Models</strong> once price collection completes.<br/>
-              Minimum {metrics.min_samples_required} labeled samples per horizon required. Need stock data to create outcome labels.
+              The ML system needs articles whose stock price <em>outcome</em> (1d/3d/5d return after publication)
+              can be verified from stored price data.<br />
+              <strong>Step 1:</strong> Click <strong>Collect Prices</strong> — this downloads the latest 90-day OHLCV data.<br />
+              <strong>Step 2:</strong> Click <strong>Train Models</strong> — labeled samples are built automatically from overlapping article + price dates.<br />
+              Minimum {metrics.min_samples_required} labeled samples required per horizon.
             </p>
           </div>
         </div>
@@ -263,7 +355,6 @@ export default function ModelAnalyticsView() {
                     <div className="font-mono" style={{ fontSize: '1.8rem', fontWeight: '900', color, marginTop: '4px' }}>
                       {value != null ? (value * 100).toFixed(1) + '%' : '—'}
                     </div>
-                    {/* Bar */}
                     <div style={{ height: '4px', background: '#1e293b', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
                       <div style={{ width: `${(value || 0) * 100}%`, height: '100%', background: color }} />
                     </div>
@@ -285,10 +376,10 @@ export default function ModelAnalyticsView() {
                   &nbsp;— CV Accuracy: <span className="font-mono" style={{ color: '#93c5fd' }}>
                     {(selectedMetric.cv_accuracy_mean * 100).toFixed(1)}% ± {(selectedMetric.cv_accuracy_std * 100).toFixed(1)}%
                   </span>
-                  &nbsp;| CV F1 (macro): <span className="font-mono" style={{ color: '#a78bfa' }}>
+                  &nbsp;| CV F1: <span className="font-mono" style={{ color: '#a78bfa' }}>
                     {(selectedMetric.cv_f1_mean * 100).toFixed(1)}%
                   </span>
-                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>(stratified k-fold, out-of-sample)</span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>(stratified k-fold)</span>
                 </div>
               )}
             </div>
@@ -301,7 +392,6 @@ export default function ModelAnalyticsView() {
               </div>
               {selectedMetric.confusion_matrix ? (
                 <div>
-                  {/* Header row */}
                   <div style={{ display: 'flex', gap: '2px', marginBottom: '2px' }}>
                     <div style={{ width: '80px' }} />
                     {CLASS_LABELS.map(cl => (
@@ -345,15 +435,15 @@ export default function ModelAnalyticsView() {
                     );
                   })}
                   <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '10px' }}>
-                    Rows = Actual class, Columns = Predicted class. Green diagonal = correct predictions.
+                    Rows = Actual class, Columns = Predicted. Green diagonal = correct.
                   </p>
                 </div>
               ) : (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No confusion matrix data yet.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No confusion matrix yet.</p>
               )}
             </div>
 
-            {/* Feature Importances (RF / GB only) */}
+            {/* Feature Importances */}
             {selectedMetric.feature_importances && (
               <div className="glass-card" style={{ padding: '20px 24px', gridColumn: '1 / -1' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -374,10 +464,8 @@ export default function ModelAnalyticsView() {
                         </span>
                         <div style={{ flex: 1, height: '8px', background: '#1e293b', borderRadius: '4px', overflow: 'hidden' }}>
                           <div style={{
-                            width: `${Math.min(imp * 100 * 5, 100)}%`,
-                            height: '100%',
-                            background: 'linear-gradient(90deg, #f59e0b, #ef4444)',
-                            borderRadius: '4px',
+                            width: `${Math.min(imp * 100 * 5, 100)}%`, height: '100%',
+                            background: 'linear-gradient(90deg, #f59e0b, #ef4444)', borderRadius: '4px',
                           }} />
                         </div>
                         <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '44px', textAlign: 'right' }}>
@@ -390,7 +478,7 @@ export default function ModelAnalyticsView() {
               </div>
             )}
 
-            {/* All Models Comparison Table for selected horizon */}
+            {/* All Models Comparison */}
             <div className="glass-card" style={{ padding: '20px 24px', gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <Cpu size={16} color="#34d399" />
@@ -400,7 +488,7 @@ export default function ModelAnalyticsView() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      {['Model','N Train','N Test','Accuracy','Precision','Recall','F1 Macro'].map(h => (
+                      {['Model','N Train','N Test','Accuracy','Precision','Recall','F1 Macro','CV Acc'].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '700' }}>{h}</th>
                       ))}
                     </tr>
@@ -411,7 +499,7 @@ export default function ModelAnalyticsView() {
                       if (!m || !m.is_sufficient) return (
                         <tr key={mn} style={{ borderBottom: '1px solid var(--border-color)' }}>
                           <td style={{ padding: '10px 12px', color: MODEL_COLORS[mn], fontWeight: '700' }}>{mn}</td>
-                          <td colSpan={6} style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                          <td colSpan={7} style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                             Insufficient data
                           </td>
                         </tr>
@@ -432,6 +520,11 @@ export default function ModelAnalyticsView() {
                               {v != null ? (v * 100).toFixed(1) + '%' : '—'}
                             </td>
                           ))}
+                          <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                            {m.cv_accuracy_mean != null
+                              ? `${(m.cv_accuracy_mean * 100).toFixed(1)}%±${(m.cv_accuracy_std * 100).toFixed(1)}%`
+                              : '—'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -445,10 +538,10 @@ export default function ModelAnalyticsView() {
           <div className="glass-card" style={{ padding: '28px', textAlign: 'center' }}>
             <AlertTriangle size={28} color="#f59e0b" style={{ marginBottom: '12px' }} />
             <p style={{ fontWeight: '700', color: '#fcd34d', marginBottom: '8px' }}>
-              Model requires more historical data for reliable training.
+              Insufficient labeled data for this model.
             </p>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              {selectedMetric.notes || 'Collect stock prices and sync more articles to enable training.'}
+              {selectedMetric.notes || 'Click Collect Prices then Train Models above.'}
             </p>
           </div>
         )
@@ -467,6 +560,12 @@ export default function ModelAnalyticsView() {
         <ShieldAlert size={14} />
         <span>{MANDATORY_DISCLAIMER}</span>
       </div>
+
+      <style>{`
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 0.8s linear infinite; }
+      `}</style>
     </div>
   );
 }

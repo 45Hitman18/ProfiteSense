@@ -651,35 +651,57 @@ def ml_metrics():
 
 
 @app.post("/api/ml/train")
-async def ml_train(background_tasks: BackgroundTasks):
+async def ml_train():
     """
-    Trigger full ML retraining pipeline (runs in background).
-    Requires stock_price data — call /api/ml/collect-prices first.
+    Run full ML training pipeline synchronously.
+    Returns real results immediately — trained metrics or insufficient data message.
     """
-    def _run():
-        results = train_all()
-        return results
-    background_tasks.add_task(_run)
+    results = await asyncio.to_thread(train_all)
+    # Summarize results for the frontend
+    trained = [k for k, v in results.items() if not v.get('insufficient') and not v.get('error')]
+    insufficient = [k for k, v in results.items() if v.get('insufficient')]
+    errors = [k for k, v in results.items() if v.get('error')]
+
+    if trained:
+        status = "trained"
+        message = f"Successfully trained {len(trained)} model(s): {', '.join(trained[:3])}."
+    elif insufficient:
+        # Get detailed message from first insufficient result
+        first_msg = next((v.get('message', '') for v in results.values() if v.get('insufficient')), '')
+        status = "insufficient_data"
+        message = first_msg or "Not enough labeled samples. Collect more stock prices and sync more articles."
+    else:
+        status = "error"
+        message = "Training failed. Check backend logs."
+
     return {
-        "status": "training_started",
-        "message": "ML pipeline training started in background. Poll /api/ml/metrics for results.",
+        "status": status,
+        "message": message,
+        "results": results,
+        "trained_count": len(trained),
+        "insufficient_count": len(insufficient),
         "compliance_disclaimer": MANDATORY_DISCLAIMER,
     }
 
 
 @app.post("/api/ml/collect-prices")
-async def ml_collect_prices(background_tasks: BackgroundTasks):
+async def ml_collect_prices():
     """
-    Fetch and store 90-day OHLCV history for all tracked tickers.
-    This provides the labeled data needed for ML training.
+    Fetch and store 90-day OHLCV history for all tracked tickers (runs synchronously).
+    Returns actual results: how many rows stored, which tickers succeeded/failed.
     """
-    def _run():
-        return fetch_and_store_prices()
-    background_tasks.add_task(_run)
+    result = await asyncio.to_thread(fetch_and_store_prices)
+    stored = result.get('stored_rows', 0)
+    failed = result.get('tickers_failed', [])
+    processed = result.get('tickers_processed', 0)
     return {
-        "status": "collection_started",
-        "message": "Stock price collection started. This may take 30-60 seconds.",
-        "next_step": "After collection completes, call POST /api/ml/train to train models.",
+        "status": "completed",
+        "stored_rows": stored,
+        "tickers_processed": processed,
+        "tickers_failed": failed,
+        "date_range": result.get('date_range', ''),
+        "message": f"Collected {stored} price rows for {processed} tickers. {'Failed: ' + ', '.join(failed[:3]) if failed else 'All tickers OK.'}",
+        "next_step": "Now click Train Models to build the ML models.",
     }
 
 
