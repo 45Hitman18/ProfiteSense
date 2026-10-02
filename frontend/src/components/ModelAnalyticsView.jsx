@@ -143,7 +143,7 @@ export default function ModelAnalyticsView() {
             { label: 'Price Rows',      value: status.stock_price_rows,  icon: <BarChart3 size={16} color="#34d399" /> },
             { label: 'Tickers Tracked', value: status.unique_tickers,    icon: <Target size={16} color="#f59e0b" /> },
             { label: 'Trained Models',  value: status.trained_models,    icon: <Cpu size={16} color="#a78bfa" /> },
-            { label: 'Dataset CSV',     value: '234 Rows',               icon: <Download size={16} color="#38bdf8" /> },
+            { label: 'Dataset Rows',    value: metrics?.dataset_csv_rows != null ? metrics.dataset_csv_rows : '—', icon: <Download size={16} color="#38bdf8" /> },
           ].map(({ label, value, icon }) => (
             <div key={label} className="glass-card" style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -274,6 +274,23 @@ export default function ModelAnalyticsView() {
                 Train: {selectedMetric.n_train} samples &nbsp;|&nbsp; Test: {selectedMetric.n_test} samples
                 &nbsp;|&nbsp; Trained: {selectedMetric.trained_at?.slice(0, 16)}
               </div>
+              {/* Cross-Validation metrics */}
+              {selectedMetric.cv_accuracy_mean != null && (
+                <div style={{
+                  marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
+                  background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
+                  fontSize: '0.78rem', color: 'var(--text-secondary)'
+                }}>
+                  <span style={{ fontWeight: '700', color: '#60a5fa' }}>Cross-Validation</span>
+                  &nbsp;— CV Accuracy: <span className="font-mono" style={{ color: '#93c5fd' }}>
+                    {(selectedMetric.cv_accuracy_mean * 100).toFixed(1)}% ± {(selectedMetric.cv_accuracy_std * 100).toFixed(1)}%
+                  </span>
+                  &nbsp;| CV F1 (macro): <span className="font-mono" style={{ color: '#a78bfa' }}>
+                    {(selectedMetric.cv_f1_mean * 100).toFixed(1)}%
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>(stratified k-fold, out-of-sample)</span>
+                </div>
+              )}
             </div>
 
             {/* Confusion Matrix */}

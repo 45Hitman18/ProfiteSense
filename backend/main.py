@@ -69,17 +69,6 @@ def root():
         "compliance_disclaimer": MANDATORY_DISCLAIMER
     }
 
-@app.get("/")
-def root():
-    return {
-        "status": "online",
-        "service": "Market News AI Backend API",
-        "frontend_ui": "http://localhost:5173",
-        "swagger_docs": "http://127.0.0.1:8000/docs",
-        "api_health": "http://127.0.0.1:8000/api/health",
-        "compliance_disclaimer": MANDATORY_DISCLAIMER
-    }
-
 @app.get("/api/health")
 def health_check():
     return {
@@ -567,7 +556,21 @@ def remove_from_watchlist(ticker: str):
 
 @app.get("/api/analytics/accuracy")
 def get_accuracy():
+    """
+    Real backtesting accuracy computed from actual post-news stock returns.
+    Returns INSUFFICIENT_DATA if stock price data is unavailable. No fake numbers.
+    """
     return get_accuracy_metrics()
+
+
+@app.get("/api/ml/backtest")
+def ml_backtest():
+    """
+    Dedicated ML backtesting endpoint.
+    Computes directional accuracy against actual OHLCV stock returns for 1d/3d/5d horizons.
+    """
+    from backtest_tracker import compute_real_backtest
+    return compute_real_backtest()
 
 
 @app.get("/api/analytics/scope")

@@ -48,9 +48,10 @@ except ImportError:
 
 try:
     from sklearn.linear_model import LogisticRegression
-    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
     from sklearn.preprocessing import LabelEncoder, StandardScaler
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+    from sklearn.pipeline import Pipeline
     from sklearn.metrics import (
         accuracy_score, precision_score, recall_score,
         f1_score, confusion_matrix, classification_report
@@ -506,7 +507,8 @@ MODELS = {
 def train_all() -> Dict[str, Any]:
     """
     Train all 3 models × 3 horizons (9 total models).
-    Computes genuine evaluation metrics, stores in DB, and saves model joblib files.
+    Computes genuine evaluation metrics with cross-validation,
+    stores in DB, and saves model joblib files.
     """
     if not (HAS_PANDAS and HAS_SKLEARN):
         return {"error": "pandas or scikit-learn not installed."}
@@ -554,6 +556,7 @@ def train_all() -> Dict[str, Any]:
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s  = scaler.transform(X_test)
+        X_full_s  = scaler.transform(X)  # full scaled data for cross-val
 
         for model_name, model_fn in MODELS.items():
             try:
@@ -572,6 +575,25 @@ def train_all() -> Dict[str, Any]:
                 if hasattr(model, "feature_importances_"):
                     fi = [round(float(x), 4) for x in model.feature_importances_]
 
+                # Cross-validation (3-fold or 5-fold depending on sample size)
+                cv_acc_mean = None
+                cv_acc_std = None
+                cv_f1_mean = None
+                try:
+                    n_folds = min(5, max(3, n_total // 10))
+                    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+                    cv_model = model_fn()  # fresh instance for CV
+                    cv_scores_acc = cross_val_score(cv_model, X_full_s, y, cv=skf,
+                                                    scoring="accuracy", n_jobs=-1)
+                    cv_model2 = model_fn()
+                    cv_scores_f1 = cross_val_score(cv_model2, X_full_s, y, cv=skf,
+                                                   scoring="f1_macro", n_jobs=-1)
+                    cv_acc_mean = round(float(np.mean(cv_scores_acc)), 4)
+                    cv_acc_std  = round(float(np.std(cv_scores_acc)), 4)
+                    cv_f1_mean  = round(float(np.mean(cv_scores_f1)), 4)
+                except Exception as cv_err:
+                    logger.warning("[ML] CV for %s %s failed: %s", model_name, horizon, cv_err)
+
                 # Save model + scaler bundle
                 model_path = os.path.join(MODEL_DIR, f"{model_name}_{horizon}.joblib")
                 joblib.dump({
@@ -581,6 +603,10 @@ def train_all() -> Dict[str, Any]:
                     "sector_enc": sector_enc,
                     "feature_names": FEATURE_NAMES,
                     "class_labels": CLASS_LABELS,
+                    "cv_acc_mean": cv_acc_mean,
+                    "cv_acc_std": cv_acc_std,
+                    "cv_f1_mean": cv_f1_mean,
+                    "n_folds": n_folds if cv_acc_mean is not None else None,
                 }, model_path)
 
                 _store_metric(
@@ -588,6 +614,7 @@ def train_all() -> Dict[str, Any]:
                     n_train=len(X_train), n_test=len(X_test),
                     accuracy=acc, precision=prec, recall=rec, f1=f1,
                     cm=cm, fi=fi, model_path=model_path,
+                    cv_acc_mean=cv_acc_mean, cv_acc_std=cv_acc_std, cv_f1_mean=cv_f1_mean,
                 )
 
                 metric = {
@@ -597,10 +624,15 @@ def train_all() -> Dict[str, Any]:
                     "recall_macro": rec, "f1_macro": f1,
                     "confusion_matrix": cm,
                     "feature_importances": fi,
+                    "cv_accuracy_mean": cv_acc_mean,
+                    "cv_accuracy_std": cv_acc_std,
+                    "cv_f1_mean": cv_f1_mean,
                     "insufficient": False,
                 }
                 results[f"{model_name}_{horizon}"] = metric
-                logger.info("[ML] %s %s → acc=%.3f f1=%.3f", model_name, horizon, acc, f1)
+                logger.info("[ML] %s %s → acc=%.3f f1=%.3f cv_acc=%.3f±%.3f",
+                           model_name, horizon, acc, f1,
+                           cv_acc_mean or 0, cv_acc_std or 0)
 
             except Exception as e:
                 logger.error("[ML] %s %s training error: %s", model_name, horizon, e)
@@ -616,21 +648,29 @@ def train_all() -> Dict[str, Any]:
 
 
 def _store_metric(model_name, horizon, n_train, n_test, accuracy, precision,
-                  recall, f1, cm, fi, model_path):
+                  recall, f1, cm, fi, model_path,
+                  cv_acc_mean=None, cv_acc_std=None, cv_f1_mean=None):
     conn = get_connection()
+    # Add CV columns to notes JSON for storage since schema is fixed
+    notes_data = {}
+    if cv_acc_mean is not None:
+        notes_data["cv_accuracy_mean"] = cv_acc_mean
+        notes_data["cv_accuracy_std"] = cv_acc_std
+        notes_data["cv_f1_mean"] = cv_f1_mean
     conn.execute("""
         INSERT OR REPLACE INTO model_metric
         (model_name, horizon, trained_at, n_train, n_test,
          accuracy, precision_macro, recall_macro, f1_macro,
          confusion_matrix, feature_names, feature_importances,
-         class_labels, is_sufficient, model_path)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
+         class_labels, is_sufficient, model_path, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)
     """, (
         model_name, horizon, datetime.now().isoformat(),
         n_train, n_test, accuracy, precision, recall, f1,
         json.dumps(cm), json.dumps(FEATURE_NAMES),
         json.dumps(fi) if fi else None,
         json.dumps(CLASS_LABELS), model_path,
+        json.dumps(notes_data) if notes_data else None,
     ))
     conn.commit()
     conn.close()
@@ -733,6 +773,8 @@ def get_model_metrics() -> Dict[str, Any]:
     """Load all stored model metrics from model_metric table."""
     conn = get_connection()
     rows = conn.execute("SELECT * FROM model_metric ORDER BY model_name, horizon").fetchall()
+    n_price_rows = conn.execute("SELECT COUNT(*) FROM stock_price").fetchone()[0]
+    n_analysis_rows = conn.execute("SELECT COUNT(*) FROM analysis").fetchone()[0]
     conn.close()
 
     metrics = []
@@ -744,9 +786,27 @@ def get_model_metrics() -> Dict[str, Any]:
         m["feature_importances"]   = json.loads(m["feature_importances"]) if m.get("feature_importances") else None
         m["feature_names"]         = json.loads(m["feature_names"]) if m.get("feature_names") else FEATURE_NAMES
         m["class_labels"]          = json.loads(m["class_labels"]) if m.get("class_labels") else CLASS_LABELS
+        # Parse CV metrics from notes JSON
+        if m.get("notes"):
+            try:
+                notes_data = json.loads(m["notes"])
+                m["cv_accuracy_mean"] = notes_data.get("cv_accuracy_mean")
+                m["cv_accuracy_std"]  = notes_data.get("cv_accuracy_std")
+                m["cv_f1_mean"]       = notes_data.get("cv_f1_mean")
+            except Exception:
+                pass
         if m.get("is_sufficient"):
             has_sufficient = True
         metrics.append(m)
+
+    # Get dataset CSV row count if available
+    dataset_rows = 0
+    if os.path.exists(DATASET_CSV_PATH):
+        try:
+            with open(DATASET_CSV_PATH, 'r') as f:
+                dataset_rows = sum(1 for _ in f) - 1  # minus header
+        except Exception:
+            dataset_rows = 0
 
     return {
         "metrics": metrics,
@@ -757,7 +817,10 @@ def get_model_metrics() -> Dict[str, Any]:
         "return_threshold_pct": RETURN_THRESHOLD,
         "compliance_disclaimer": "AI/model estimate — not investment advice.",
         "dataset_csv_available": os.path.exists(DATASET_CSV_PATH),
+        "dataset_csv_rows": dataset_rows,
         "dataset_download_url": "/api/ml/dataset/download",
+        "stock_price_rows": n_price_rows,
+        "analysis_rows": n_analysis_rows,
     }
 
 
