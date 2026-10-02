@@ -21,35 +21,47 @@ const FEATURE_LABELS = [
 const CLASS_LABELS = ["Negative", "Neutral", "Positive"];
 const CLASS_COLORS = { Negative: "#f43f5e", Neutral: "#f59e0b", Positive: "#10b981" };
 
-// Toast notification component
+// Toast notification component - appears below sticky header
 function Toast({ toast, onClose }) {
   if (!toast) return null;
-  const colors = {
-    success: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.4)', icon: <CheckCircle size={16} color="#10b981" />, text: '#6ee7b7' },
-    error:   { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.4)',  icon: <XCircle size={16} color="#f87171" />,    text: '#fca5a5' },
-    warning: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)', icon: <AlertTriangle size={16} color="#f59e0b" />, text: '#fde68a' },
-    info:    { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)', icon: <Info size={16} color="#60a5fa" />,        text: '#93c5fd' },
+  const styles = {
+    success: { bg: '#e8f5e9', border: '#4caf50', iconColor: '#2e7d32', titleColor: '#1b5e20', icon: <CheckCircle size={16} color="#2e7d32" /> },
+    error:   { bg: '#ffeaea', border: '#e53935', iconColor: '#b71c1c', titleColor: '#b71c1c', icon: <XCircle size={16} color="#b71c1c" /> },
+    warning: { bg: '#fff8e1', border: '#f9a825', iconColor: '#e65100', titleColor: '#e65100', icon: <AlertTriangle size={16} color="#e65100" /> },
+    info:    { bg: '#e3f2fd', border: '#1976d2', iconColor: '#0d47a1', titleColor: '#0d47a1', icon: <Info size={16} color="#1976d2" /> },
   };
-  const c = colors[toast.type] || colors.info;
+  const c = styles[toast.type] || styles.info;
   return (
     <div style={{
-      position: 'fixed', top: '24px', right: '24px', zIndex: 9999,
-      padding: '14px 18px', borderRadius: '12px', maxWidth: '420px',
-      background: c.bg, border: `1px solid ${c.border}`,
-      display: 'flex', alignItems: 'flex-start', gap: '10px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      animation: 'slideIn 0.3s ease'
+      position: 'fixed',
+      top: '80px',      /* below sticky header */
+      right: '20px',
+      zIndex: 10000,    /* above header (50), modal (100), overlay (9998) */
+      padding: '14px 18px',
+      borderRadius: '8px',
+      maxWidth: '400px',
+      minWidth: '280px',
+      background: c.bg,
+      border: `2px solid ${c.border}`,
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '10px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+      animation: 'toastSlideIn 0.25s ease',
     }}>
-      <div style={{ flexShrink: 0, marginTop: '1px' }}>{c.icon}</div>
+      <div style={{ flexShrink: 0, marginTop: '2px' }}>{c.icon}</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: '700', color: c.text, fontSize: '0.88rem', marginBottom: '3px' }}>
+        <div style={{ fontWeight: '700', color: c.titleColor, fontSize: '0.88rem', marginBottom: '4px', fontFamily: 'var(--font-sans)' }}>
           {toast.title}
         </div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: '0.79rem', color: '#333', lineHeight: 1.5, fontFamily: 'var(--font-sans)', whiteSpace: 'pre-line' }}>
           {toast.message}
         </div>
       </div>
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 0 0 8px' }}>✕</button>
+      <button
+        onClick={onClose}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', padding: '0 0 0 8px', fontSize: '1rem', lineHeight: 1 }}
+      >×</button>
     </div>
   );
 }
@@ -60,24 +72,27 @@ function ProgressOverlay({ visible, label, subLabel }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9998,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      background: 'rgba(23,23,23,0.72)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: 'var(--bg-secondary)', borderRadius: '16px',
-        padding: '40px 48px', textAlign: 'center',
-        border: '1px solid var(--border-color)',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.5)'
+        background: '#FFFDF8',
+        border: '2px solid #171717',
+        borderRadius: '8px',
+        padding: '40px 48px',
+        textAlign: 'center',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+        maxWidth: '360px',
       }}>
         <div style={{
-          width: '56px', height: '56px', borderRadius: '50%',
-          border: '4px solid rgba(124,58,237,0.2)',
-          borderTopColor: '#7c3aed',
-          animation: 'spin 0.8s linear infinite',
-          margin: '0 auto 20px'
+          width: '52px', height: '52px', borderRadius: '50%',
+          border: '4px solid #e5e0d8',
+          borderTopColor: '#A71919',
+          animation: 'mlSpin 0.8s linear infinite',
+          margin: '0 auto 20px',
         }} />
-        <div style={{ fontSize: '1.1rem', fontWeight: '800', marginBottom: '8px' }}>{label}</div>
-        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{subLabel}</div>
+        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#171717', fontFamily: 'var(--font-serif)', marginBottom: '8px' }}>{label}</div>
+        <div style={{ fontSize: '0.82rem', color: '#59544C', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>{subLabel}</div>
       </div>
     </div>
   );
@@ -562,9 +577,9 @@ export default function ModelAnalyticsView() {
       </div>
 
       <style>{`
-        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin 0.8s linear infinite; }
+        @keyframes toastSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes mlSpin { to { transform: rotate(360deg); } }
+        .spin { animation: mlSpin 0.8s linear infinite; }
       `}</style>
     </div>
   );

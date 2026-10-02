@@ -656,7 +656,17 @@ async def ml_train():
     Run full ML training pipeline synchronously.
     Returns real results immediately — trained metrics or insufficient data message.
     """
-    results = await asyncio.to_thread(train_all)
+    try:
+        results = await asyncio.to_thread(train_all)
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"Training error: {str(exc)}",
+            "results": {},
+            "trained_count": 0,
+            "compliance_disclaimer": MANDATORY_DISCLAIMER,
+        }
+
     # Summarize results for the frontend
     trained = [k for k, v in results.items() if not v.get('insufficient') and not v.get('error')]
     insufficient = [k for k, v in results.items() if v.get('insufficient')]
@@ -664,15 +674,17 @@ async def ml_train():
 
     if trained:
         status = "trained"
-        message = f"Successfully trained {len(trained)} model(s): {', '.join(trained[:3])}."
+        message = f"Successfully trained {len(trained)} model(s): {', '.join(trained[:3])}{'...' if len(trained) > 3 else ''}."
     elif insufficient:
-        # Get detailed message from first insufficient result
         first_msg = next((v.get('message', '') for v in results.values() if v.get('insufficient')), '')
         status = "insufficient_data"
-        message = first_msg or "Not enough labeled samples. Collect more stock prices and sync more articles."
-    else:
+        message = first_msg or "Not enough labeled samples. Collect prices first, then try training again."
+    elif errors:
         status = "error"
-        message = "Training failed. Check backend logs."
+        message = f"Training errors: {'; '.join(str(v.get('error',''))[:60] for v in results.values() if v.get('error'))[:200]}"
+    else:
+        status = "no_results"
+        message = "No results returned. Check backend logs."
 
     return {
         "status": status,
@@ -687,10 +699,17 @@ async def ml_train():
 @app.post("/api/ml/collect-prices")
 async def ml_collect_prices():
     """
-    Fetch and store 90-day OHLCV history for all tracked tickers (runs synchronously).
-    Returns actual results: how many rows stored, which tickers succeeded/failed.
+    Fetch and store OHLCV history for all tracked tickers (runs synchronously).
+    Fetches both recent 90-day AND historical windows to match article dates.
     """
-    result = await asyncio.to_thread(fetch_and_store_prices)
+    try:
+        result = await asyncio.to_thread(fetch_and_store_prices)
+    except Exception as exc:
+        return {
+            "status": "error",
+            "stored_rows": 0,
+            "message": f"Price collection error: {str(exc)}",
+        }
     stored = result.get('stored_rows', 0)
     failed = result.get('tickers_failed', [])
     processed = result.get('tickers_processed', 0)
@@ -698,10 +717,11 @@ async def ml_collect_prices():
         "status": "completed",
         "stored_rows": stored,
         "tickers_processed": processed,
-        "tickers_failed": failed,
+        "tickers_failed": failed[:10],
         "date_range": result.get('date_range', ''),
-        "message": f"Collected {stored} price rows for {processed} tickers. {'Failed: ' + ', '.join(failed[:3]) if failed else 'All tickers OK.'}",
-        "next_step": "Now click Train Models to build the ML models.",
+        "article_date_range": result.get('article_date_range', ''),
+        "message": f"Collected {stored} price rows for {processed} tickers. {'Some failed: ' + ', '.join(failed[:3]) if failed else 'All tickers OK.'}",
+        "next_step": "Now click Train Models to build ML models from the collected data.",
     }
 
 
