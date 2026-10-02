@@ -69,11 +69,11 @@ function Toast({ toast, onClose }) {
 // Live Process & Logs Panel Component
 function MLProcessPanel({ job, onDismiss, onRefresh }) {
   const [showLogs, setShowLogs] = useState(true);
-  const logEndRef = useRef(null);
+  const logContainerRef = useRef(null);
 
   useEffect(() => {
-    if (showLogs && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (showLogs && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [job?.logs?.length, showLogs]);
 
@@ -198,17 +198,20 @@ function MLProcessPanel({ job, onDismiss, onRefresh }) {
         </div>
 
         {showLogs && (
-          <div style={{
-            background: '#020617',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            maxHeight: '160px',
-            overflowY: 'auto',
-            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-            fontSize: '0.76rem',
-            lineHeight: 1.6,
-          }}>
+          <div
+            ref={logContainerRef}
+            style={{
+              background: '#020617',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              maxHeight: '160px',
+              overflowY: 'auto',
+              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+              fontSize: '0.76rem',
+              lineHeight: 1.6,
+            }}
+          >
             {job.logs && job.logs.length > 0 ? (
               job.logs.map((line, idx) => {
                 let color = '#94a3b8';
@@ -224,7 +227,6 @@ function MLProcessPanel({ job, onDismiss, onRefresh }) {
             ) : (
               <div style={{ color: '#64748b' }}>Awaiting initial logs...</div>
             )}
-            <div ref={logEndRef} />
           </div>
         )}
       </div>
