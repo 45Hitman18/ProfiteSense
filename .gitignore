@@ -1,0 +1,75 @@
+# =============================================
+# SECRETS & CREDENTIALS — NEVER COMMIT THESE
+# =============================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+credentials.json
+service_account.json
+*secrets*
+*credential*
+
+# =============================================
+# PYTHON BACKEND
+# =============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyc
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+htmlcov/
+.pytest_cache/
+*.log
+
+# SQLite databases (contain live data — exclude from VCS)
+backend/market_news.db
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================
+# NODE / FRONTEND
+# =============================================
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+dist/
+frontend/.vite/
+.npm
+*.tgz
+.yarn-integrity
+
+# =============================================
+# IDE / OS
+# =============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
