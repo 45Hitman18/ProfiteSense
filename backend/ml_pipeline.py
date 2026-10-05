@@ -50,7 +50,7 @@ try:
     from sklearn.linear_model import LogisticRegression
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
     from sklearn.preprocessing import LabelEncoder, StandardScaler
-    from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+    from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, TimeSeriesSplit
     from sklearn.pipeline import Pipeline
     from sklearn.metrics import (
         accuracy_score, precision_score, recall_score,
@@ -258,37 +258,19 @@ def _get_future_return(ticker: str, pub_date: str, n_days: int) -> Tuple[Optiona
     return start_price, end_price, round(ret, 4)
 
 
-def _historical_category_reactions(horizon: str, analysis_rows: List[Any]) -> Dict[str, float]:
-    """Compute mean actual return by event_type for historical reaction feature."""
-    days_map = {"1d": 1, "3d": 3, "5d": 5}
-    n_days = days_map.get(horizon, 3)
-    cat_returns = defaultdict(list)
-
-    for r in analysis_rows:
-        ticker = r["ticker"]
-        pub_dt = _parse_date_str(r["published_at"])
-        if not ticker or not pub_dt:
-            continue
-        _, _, ret = _get_future_return(ticker, pub_dt, n_days)
-        if ret is not None:
-            cat_returns[r["event_type"] or "OTHER"].append(ret)
-
-    result = {}
-    for cat, rets in cat_returns.items():
-        result[cat] = round(float(np.mean(rets)), 4) if rets else 0.0
-    return result
-
-
 def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], Dict[str, int]]]:
     """
     Join analysis + stock_price to build a labeled feature matrix.
-    Returns (DataFrame, event_enc, sector_enc) or None.
+    Enforces strict point-in-time feature construction with zero data leakage:
+    1. Historical reactions are computed strictly from events realized prior to the article timestamp.
+    2. Recency/session timing is strictly based on the publication timestamp without wall-clock bias.
+    3. Records are ordered chronologically by publication time.
     """
     if not (HAS_PANDAS and HAS_SKLEARN):
         return None
 
     days_map = {"1d": 1, "3d": 3, "5d": 5}
-    n_days = days_map.get(horizon, 3)
+    n_days = days_map.get(horizon, 1)
 
     conn = get_connection()
     query = """
@@ -296,17 +278,27 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
             an.id AS analysis_id,
             an.article_id,
             an.ticker,
+            an.company_name,
             an.sector,
             an.event_type,
             an.sentiment_score,
             an.direction,
             an.impact_level,
+            an.forward_return_1d,
+            an.forward_return_3d,
+            an.forward_return_5d,
+            an.source_dataset,
+            an.source_ticker,
+            an.source_company,
+            an.affected_ticker,
+            an.affected_company,
             a.title AS article_title,
             a.published_at,
             a.source
         FROM analysis an
         JOIN articles a ON an.article_id = a.id
         WHERE an.ticker IS NOT NULL AND a.published_at IS NOT NULL
+        ORDER BY a.published_at ASC
     """
     rows = conn.execute(query).fetchall()
     conn.close()
@@ -314,12 +306,16 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
     if not rows:
         return None
 
-    cat_reactions = _historical_category_reactions(horizon, rows)
-
     event_types = sorted(list({r["event_type"] or "OTHER" for r in rows}))
     sectors = sorted(list({r["sector"] or "Broad Market" for r in rows}))
     event_enc = {e: i for i, e in enumerate(event_types)}
     sector_enc = {s: i for i, s in enumerate(sectors)}
+
+    # Point-in-time category reaction tracker (Zero Leakage)
+    # Only events whose future return period completed on or before current pub_dt are added
+    cat_return_sum = defaultdict(float)
+    cat_return_count = defaultdict(int)
+    pending_realizations = []  # list of (realization_date_str, category, return_pct)
 
     records = []
     for r in rows:
@@ -328,21 +324,65 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
         if not pub_dt:
             continue
 
-        start_price, end_price, actual_ret = _get_future_return(ticker, pub_dt, n_days)
+        # Determine actual future return for the specified horizon
+        actual_ret = None
+        if horizon == "1d":
+            actual_ret = r["forward_return_1d"]
+        elif horizon == "3d":
+            actual_ret = r["forward_return_3d"]
+        elif horizon == "5d":
+            actual_ret = r["forward_return_5d"]
+
+        # If not already present in column, attempt lookup in stock_price OHLCV
         if actual_ret is None:
-            continue  # Future stock return not yet available for this horizon
+            _, _, actual_ret = _get_future_return(ticker, pub_dt, n_days)
+
+        if actual_ret is None:
+            continue  # Future return not yet realized / unavailable for this horizon
+
+        # Point-in-Time update: realize past events that completed prior to current pub_dt
+        new_pending = []
+        for r_date, cat_name, ret_val in pending_realizations:
+            if r_date <= pub_dt:
+                cat_return_sum[cat_name] += ret_val
+                cat_return_count[cat_name] += 1
+            else:
+                new_pending.append((r_date, cat_name, ret_val))
+        pending_realizations = new_pending
+
+        # Compute point-in-time historical category reaction
+        cat = r["event_type"] or "OTHER"
+        if cat_return_count[cat] > 0:
+            hist_cat_reaction = round(cat_return_sum[cat] / cat_return_count[cat], 4)
+        else:
+            hist_cat_reaction = 0.0
+
+        # Queue current event's completion date for future point-in-time calculations
+        try:
+            pub_date_obj = datetime.strptime(pub_dt, "%Y-%m-%d")
+            completion_dt = (pub_date_obj + timedelta(days=n_days + 1)).strftime("%Y-%m-%d")
+            pending_realizations.append((completion_dt, cat, actual_ret))
+        except Exception:
+            pass
 
         label = _return_to_class(actual_ret)
         stock_feats = _get_stock_features(ticker, pub_dt)
         mkt_trend = _get_market_trend(pub_dt)
 
-        # News recency
+        # Point-in-time session timing (hour in day normalized: 09:15 -> ~0.385)
+        raw_pub = str(r["published_at"])
+        session_timing = 0.3854  # Default 09:15 AM
         try:
-            pub_ts = datetime.strptime(pub_dt, "%Y-%m-%d")
-            age_h = (datetime.utcnow() - pub_ts).total_seconds() / 3600
-            recency = max(0.0, 168.0 - min(age_h, 168.0)) / 168.0
+            if "T" in raw_pub and len(raw_pub) >= 16:
+                tp = raw_pub.split("T")[1][:5]
+                hh, mm = map(int, tp.split(":"))
+                session_timing = round((hh + mm / 60.0) / 24.0, 4)
+            elif " " in raw_pub and len(raw_pub) >= 16:
+                tp = raw_pub.split(" ")[1][:5]
+                hh, mm = map(int, tp.split(":"))
+                session_timing = round((hh + mm / 60.0) / 24.0, 4)
         except Exception:
-            recency = 0.5
+            session_timing = 0.3854
 
         sent_score = float(r["sentiment_score"] or 0.0)
 
@@ -356,8 +396,8 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
             stock_feats["historical_volatility"],
             stock_feats["volume_norm"],
             mkt_trend,
-            float(cat_reactions.get(r["event_type"] or "OTHER", 0.0)),
-            round(recency, 4),
+            hist_cat_reaction,
+            session_timing,
         ]
 
         records.append({
@@ -370,8 +410,6 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
             "sector": r["sector"],
             "event_type": r["event_type"],
             "published_at": pub_dt,
-            "start_price": start_price,
-            "end_price": end_price,
             "actual_return": actual_ret,
         })
 
@@ -389,7 +427,8 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
 def export_dataset() -> Dict[str, Any]:
     """
     Build and export a consolidated dataset with all articles, analysis,
-    technical indicators, and multi-horizon target labels to dataset_export.csv.
+    technical indicators, multi-horizon returns, and labels to dataset_export.csv.
+    Preserves source vs affected ticker/company distinctions.
     """
     get_price_cache().reload()
     conn = get_connection()
@@ -401,6 +440,11 @@ def export_dataset() -> Dict[str, Any]:
             a.source,
             a.url,
             a.published_at,
+            an.source_dataset,
+            an.source_ticker,
+            an.source_company,
+            an.affected_ticker,
+            an.affected_company,
             an.ticker,
             an.company_name,
             an.sector,
@@ -411,7 +455,9 @@ def export_dataset() -> Dict[str, Any]:
             an.direction,
             an.impact_level,
             an.confidence,
-            an.reason_explanation
+            an.forward_return_1d,
+            an.forward_return_3d,
+            an.forward_return_5d
         FROM analysis an
         JOIN articles a ON an.article_id = a.id
         WHERE an.ticker IS NOT NULL
@@ -430,11 +476,18 @@ def export_dataset() -> Dict[str, Any]:
         stock_feats = _get_stock_features(ticker, pub_dt)
         mkt_trend = _get_market_trend(pub_dt)
 
-        sp_1, ep_1, ret_1 = _get_future_return(ticker, pub_dt, 1)
-        sp_3, ep_3, ret_3 = _get_future_return(ticker, pub_dt, 3)
-        sp_5, ep_5, ret_5 = _get_future_return(ticker, pub_dt, 5)
+        # 1D, 3D, 5D returns: prioritize stored real returns, fallback to stock_price OHLCV
+        ret_1 = r["forward_return_1d"]
+        if ret_1 is None:
+            _, _, ret_1 = _get_future_return(ticker, pub_dt, 1)
 
-        start_p = sp_1 or sp_3 or sp_5
+        ret_3 = r["forward_return_3d"]
+        if ret_3 is None:
+            _, _, ret_3 = _get_future_return(ticker, pub_dt, 3)
+
+        ret_5 = r["forward_return_5d"]
+        if ret_5 is None:
+            _, _, ret_5 = _get_future_return(ticker, pub_dt, 5)
 
         rec = {
             "analysis_id": r["analysis_id"],
@@ -443,6 +496,11 @@ def export_dataset() -> Dict[str, Any]:
             "source": r["source"],
             "url": r["url"],
             "published_at": pub_dt,
+            "source_dataset": r["source_dataset"] or "production",
+            "source_ticker": r["source_ticker"] or ticker,
+            "source_company": r["source_company"] or r["company_name"],
+            "affected_ticker": r["affected_ticker"] or ticker,
+            "affected_company": r["affected_company"] or r["company_name"],
             "ticker": ticker,
             "company_name": r["company_name"],
             "sector": r["sector"] or "Broad Market",
@@ -456,12 +514,11 @@ def export_dataset() -> Dict[str, Any]:
             "historical_volatility": stock_feats["historical_volatility"],
             "volume_norm": stock_feats["volume_norm"],
             "market_trend": mkt_trend,
-            "start_close_price": start_p,
-            "return_1d_pct": ret_1,
+            "return_1d": ret_1,
             "label_1d": _return_to_class(ret_1) if ret_1 is not None else "UNLABELED",
-            "return_3d_pct": ret_3,
+            "return_3d": ret_3,
             "label_3d": _return_to_class(ret_3) if ret_3 is not None else "UNLABELED",
-            "return_5d_pct": ret_5,
+            "return_5d": ret_5,
             "label_5d": _return_to_class(ret_5) if ret_5 is not None else "UNLABELED",
         }
         export_records.append(rec)
@@ -487,7 +544,7 @@ def export_dataset() -> Dict[str, Any]:
 
 
 # ══════════════════════════════════════════════════════════════════
-# 4.  TRAINING PIPELINE
+# 4.  TRAINING PIPELINE (Walk-Forward Chronological Validation)
 # ══════════════════════════════════════════════════════════════════
 MODELS = {
     "LogisticRegression": lambda: LogisticRegression(
@@ -504,16 +561,23 @@ MODELS = {
 }
 
 
-def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None) -> Dict[str, Any]:
+def train_all(
+    on_progress: Optional[Callable[[int, int, str, str], None]] = None,
+    is_cancelled: Optional[Callable[[], bool]] = None
+) -> Dict[str, Any]:
     """
     Train all 3 models × 3 horizons (9 total models).
-    Computes genuine evaluation metrics with cross-validation,
-    stores in DB, and saves model joblib files.
+    Enforces strict time-aware evaluation:
+    - Chronological 80/20 train/test split (no future data mixed into training).
+    - Walk-Forward Expanding-Window TimeSeriesSplit on training data.
+    - True out-of-sample forward evaluation on held-out test data.
     """
     if not (HAS_PANDAS and HAS_SKLEARN):
         return {"error": "pandas or scikit-learn not installed."}
 
-    # Ensure price cache is fresh
+    if is_cancelled and is_cancelled():
+        return {"status": "cancelled", "message": "Training cancelled."}
+
     if on_progress:
         on_progress(1, 10, "Cache", "Refreshing in-memory stock price cache...")
     get_price_cache().reload()
@@ -524,6 +588,9 @@ def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None
     current_step = 1
 
     for horizon in horizons:
+        if is_cancelled and is_cancelled():
+            return results
+
         dataset = _build_labeled_dataset(horizon)
         if dataset is None:
             for model_name in MODELS:
@@ -553,25 +620,22 @@ def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None
         X = np.array(df["X"].tolist())
         y = np.array(df["label"].tolist())
 
-        # Train/test split (80/20 stratified if possible)
-        try:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42, stratify=y
-            )
-        except ValueError:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
+        # Strict Chronological Train/Test split: first 80% train, last 20% test (Out-Of-Sample forward test)
+        split_idx = int(n_total * 0.8)
+        X_train, y_train = X[:split_idx], y[:split_idx]
+        X_test, y_test   = X[split_idx:], y[split_idx:]
 
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s  = scaler.transform(X_test)
-        X_full_s  = scaler.transform(X)  # full scaled data for cross-val
 
         for model_name, model_fn in MODELS.items():
+            if is_cancelled and is_cancelled():
+                return results
+
             current_step += 1
             if on_progress:
-                on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Training {model_name} for {horizon} horizon (Stratified CV)...")
+                on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Training {model_name} for {horizon} horizon (Walk-Forward CV)...")
             try:
                 model = model_fn()
                 model.fit(X_train_s, y_train)
@@ -588,24 +652,24 @@ def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None
                 if hasattr(model, "feature_importances_"):
                     fi = [round(float(x), 4) for x in model.feature_importances_]
 
-                # Cross-validation (3-fold or 5-fold depending on sample size)
+                # Walk-Forward Cross-validation (expanding window TimeSeriesSplit on training data)
                 cv_acc_mean = None
                 cv_acc_std = None
                 cv_f1_mean = None
+                n_splits = min(5, max(3, len(X_train) // 100))
                 try:
-                    n_folds = min(5, max(3, n_total // 10))
-                    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
-                    cv_model = model_fn()  # fresh instance for CV
-                    cv_scores_acc = cross_val_score(cv_model, X_full_s, y, cv=skf,
+                    tscv = TimeSeriesSplit(n_splits=n_splits)
+                    cv_model = model_fn()
+                    cv_scores_acc = cross_val_score(cv_model, X_train_s, y_train, cv=tscv,
                                                     scoring="accuracy", n_jobs=-1)
                     cv_model2 = model_fn()
-                    cv_scores_f1 = cross_val_score(cv_model2, X_full_s, y, cv=skf,
+                    cv_scores_f1 = cross_val_score(cv_model2, X_train_s, y_train, cv=tscv,
                                                    scoring="f1_macro", n_jobs=-1)
                     cv_acc_mean = round(float(np.mean(cv_scores_acc)), 4)
                     cv_acc_std  = round(float(np.std(cv_scores_acc)), 4)
                     cv_f1_mean  = round(float(np.mean(cv_scores_f1)), 4)
                 except Exception as cv_err:
-                    logger.warning("[ML] CV for %s %s failed: %s", model_name, horizon, cv_err)
+                    logger.warning("[ML] Walk-forward CV for %s %s failed: %s", model_name, horizon, cv_err)
 
                 # Save model + scaler bundle
                 model_path = os.path.join(MODEL_DIR, f"{model_name}_{horizon}.joblib")
@@ -619,7 +683,7 @@ def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None
                     "cv_acc_mean": cv_acc_mean,
                     "cv_acc_std": cv_acc_std,
                     "cv_f1_mean": cv_f1_mean,
-                    "n_folds": n_folds if cv_acc_mean is not None else None,
+                    "n_folds": n_splits if cv_acc_mean is not None else None,
                 }, model_path)
 
                 _store_metric(
@@ -647,7 +711,7 @@ def train_all(on_progress: Optional[Callable[[int, int, str, str], None]] = None
                            model_name, horizon, acc, f1,
                            cv_acc_mean or 0, cv_acc_std or 0)
                 if on_progress:
-                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Done {model_name} ({horizon}): Acc={acc*100:.1f}%, CV Acc={(cv_acc_mean or 0)*100:.1f}%")
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Done {model_name} ({horizon}): Out-of-sample Acc={acc*100:.1f}%, Walk-Forward Acc={(cv_acc_mean or 0)*100:.1f}%")
 
             except Exception as e:
                 logger.error("[ML] %s %s training error: %s", model_name, horizon, e)

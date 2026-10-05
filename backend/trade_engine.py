@@ -665,7 +665,34 @@ def _build_neutral_notes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_ohlcv(ticker: str, period: str = "3mo") -> List[Dict[str, Any]]:
-    """Fetch OHLCV from yfinance. Returns list of {open,high,low,close,volume}."""
+    """Fetch OHLCV from local stock_price database table first (sub-millisecond), fallback to yfinance."""
+    try:
+        from database import get_connection
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("""
+            SELECT open, high, low, close, volume
+            FROM stock_price
+            WHERE ticker = ? AND close > 0
+            ORDER BY date DESC
+            LIMIT 90
+        """, (ticker,))
+        rows = c.fetchall()
+        conn.close()
+        if rows and len(rows) >= 10:
+            result = []
+            for r in reversed(rows):
+                result.append({
+                    "open":   float(r[0] or r[3]),
+                    "high":   float(r[1] or r[3]),
+                    "low":    float(r[2] or r[3]),
+                    "close":  float(r[3]),
+                    "volume": int(float(r[4] or 0))
+                })
+            return result
+    except Exception as ex:
+        pass
+
     if not YF_AVAILABLE:
         return []
     try:

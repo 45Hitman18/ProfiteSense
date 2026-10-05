@@ -48,6 +48,7 @@ backend/market_news.db
 *.db
 *.sqlite
 *.sqlite3
+indic_finance_data/
 
 # =============================================
 # NODE / FRONTEND

@@ -14,15 +14,18 @@ INDICES_CONFIG = [
 ]
 
 SECTORS_CONFIG = [
-    {"symbol": "HDFCBANK.NS", "sector": "Banking & Finance"},
-    {"symbol": "TCS.NS", "sector": "Information Technology"},
-    {"symbol": "TATAMOTORS.NS", "sector": "Automobile"},
-    {"symbol": "RELIANCE.NS", "sector": "Energy & Petrochemicals"},
-    {"symbol": "HINDUNILVR.NS", "sector": "Consumer Goods (FMCG)"},
-    {"symbol": "SUNPHARMA.NS", "sector": "Pharmaceuticals"},
-    {"symbol": "TATASTEEL.NS", "sector": "Metals & Mining"},
-    {"symbol": "LT.NS", "sector": "Engineering & Construction"},
-    {"symbol": "BHARTIARTL.NS", "sector": "Telecommunications"}
+    {"symbol": "HDFCBANK.NS", "sector": "Banking & Finance", "icon": "Landmark"},
+    {"symbol": "TCS.NS", "sector": "Information Technology", "icon": "Cpu"},
+    {"symbol": "MARUTI.NS", "sector": "Automobile & Auto Ancillary", "icon": "Car"},
+    {"symbol": "RELIANCE.NS", "sector": "Energy & Petrochemicals", "icon": "Flame"},
+    {"symbol": "HINDUNILVR.NS", "sector": "Consumer Goods (FMCG)", "icon": "ShoppingBag"},
+    {"symbol": "SUNPHARMA.NS", "sector": "Pharmaceuticals & Healthcare", "icon": "Pill"},
+    {"symbol": "TATASTEEL.NS", "sector": "Metals & Mining", "icon": "Pickaxe"},
+    {"symbol": "LT.NS", "sector": "Engineering & Infrastructure", "icon": "HardHat"},
+    {"symbol": "BHARTIARTL.NS", "sector": "Telecommunications", "icon": "Radio"},
+    {"symbol": "DLF.NS", "sector": "Real Estate & Realty", "icon": "Building2"},
+    {"symbol": "TATAPOWER.NS", "sector": "Power & Renewable Energy", "icon": "Zap"},
+    {"symbol": "BAJFINANCE.NS", "sector": "NBFC & Financial Services", "icon": "CreditCard"}
 ]
 
 class YahooFinanceMarketProvider(BaseMarketProvider):
@@ -126,43 +129,101 @@ class YahooFinanceMarketProvider(BaseMarketProvider):
     def get_indices(self) -> List[Dict[str, Any]]:
         results = []
         for item in INDICES_CONFIG:
+            symbol = item["symbol"]
+            current = None
+            prev = None
+            change_pct = 0.0
+            change_val = 0.0
+
             try:
-                yf_ticker = yf.Ticker(item["symbol"])
-                hist = yf_ticker.history(period="2d")
-                if not hist.empty:
+                yf_ticker = yf.Ticker(symbol)
+                hist = yf_ticker.history(period="5d")
+                if not hist.empty and len(hist) >= 1:
                     current = float(hist["Close"].iloc[-1])
-                    prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else current
-                    change_pct = round(((current - prev) / prev) * 100, 2)
-                    change_val = round(current - prev, 2)
-                    results.append({
-                        "symbol": item["symbol"],
-                        "name": item["name"],
-                        "short": item["short"],
-                        "region": item["region"],
-                        "value": round(current, 2),
-                        "change": change_val,
-                        "change_pct": change_pct
-                    })
+                    if len(hist) >= 2:
+                        prev = float(hist["Close"].iloc[-2])
+                        change_pct = round(((current - prev) / prev) * 100, 2)
+                        change_val = round(current - prev, 2)
             except Exception:
-                continue
+                pass
+
+            if current is None or current <= 0:
+                try:
+                    from database import get_connection
+                    conn = get_connection()
+                    rows = conn.execute(
+                        "SELECT close FROM stock_price WHERE ticker=? AND close > 0 ORDER BY date DESC LIMIT 2",
+                        (symbol,)
+                    ).fetchall()
+                    conn.close()
+                    if rows and len(rows) >= 1:
+                        current = float(rows[0][0])
+                        if len(rows) >= 2:
+                            prev = float(rows[1][0])
+                            change_pct = round(((current - prev) / prev) * 100, 2)
+                            change_val = round(current - prev, 2)
+                except Exception:
+                    pass
+
+            if current is not None and current > 0:
+                results.append({
+                    "symbol": symbol,
+                    "name": item["name"],
+                    "short": item["short"],
+                    "region": item["region"],
+                    "value": round(current, 2),
+                    "change": change_val,
+                    "change_pct": change_pct
+                })
         return results
 
     def get_sectors(self) -> List[Dict[str, Any]]:
         results = []
         for item in SECTORS_CONFIG:
+            symbol = item["symbol"]
+            sector_name = item["sector"]
+            icon = item.get("icon", "Layers")
+            current = None
+            prev = None
+            change_pct = 0.0
+
+            # 1. Try yfinance with 5d lookback for reliable prior close
             try:
-                yf_ticker = yf.Ticker(item["symbol"])
-                hist = yf_ticker.history(period="2d")
-                if not hist.empty:
+                yf_ticker = yf.Ticker(symbol)
+                hist = yf_ticker.history(period="5d")
+                if not hist.empty and len(hist) >= 1:
                     current = float(hist["Close"].iloc[-1])
-                    prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else current
-                    change_pct = round(((current - prev) / prev) * 100, 2)
-                    results.append({
-                        "symbol": item["symbol"],
-                        "sector": item["sector"],
-                        "price": round(current, 2),
-                        "change_pct": change_pct
-                    })
+                    if len(hist) >= 2:
+                        prev = float(hist["Close"].iloc[-2])
+                        change_pct = round(((current - prev) / prev) * 100, 2)
             except Exception:
-                continue
+                pass
+
+            # 2. Database price fallback
+            if current is None or current <= 0 or change_pct == 0.0:
+                try:
+                    from database import get_connection
+                    conn = get_connection()
+                    rows = conn.execute(
+                        "SELECT close FROM stock_price WHERE ticker=? AND close > 0 ORDER BY date DESC LIMIT 2",
+                        (symbol,)
+                    ).fetchall()
+                    conn.close()
+                    if rows and len(rows) >= 1:
+                        if current is None or current <= 0:
+                            current = float(rows[0][0])
+                        if len(rows) >= 2 and change_pct == 0.0:
+                            prev = float(rows[1][0])
+                            change_pct = round(((current - prev) / prev) * 100, 2)
+                except Exception:
+                    pass
+
+            if current is not None and current > 0:
+                results.append({
+                    "symbol": symbol,
+                    "sector": sector_name,
+                    "icon": icon,
+                    "price": round(current, 2),
+                    "change_pct": change_pct
+                })
         return results

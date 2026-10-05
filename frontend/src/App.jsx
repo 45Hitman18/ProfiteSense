@@ -17,6 +17,7 @@ import AnalysisModal from './components/AnalysisModal';
 import ModelAnalyticsView from './components/ModelAnalyticsView';
 import SettingsView from './components/SettingsView';
 import StockSearchBar from './components/StockSearchBar';
+import NotificationCenter from './components/NotificationCenter';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -171,8 +172,13 @@ export default function App() {
           </div>
 
           {/* Masthead Right: Search Bar & Latency */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', minWidth: '300px', flex: '0 1 400px' }}>
-            <StockSearchBar onSelectStock={handleExploreTicker} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', minWidth: '340px', flex: '0 1 480px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', justifyContent: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <StockSearchBar onSelectStock={handleExploreTicker} />
+              </div>
+              <NotificationCenter onExploreTicker={handleExploreTicker} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               <span style={{ color: '#736B63' }}>Server Latency: 1.2ms (BSE Colocated)</span>
               <span style={{ color: '#C9C1B5' }}>•</span>
@@ -196,69 +202,31 @@ export default function App() {
       <div style={{ background: '#F5F1E8', borderTop: '2px solid #171717', borderBottom: '2px solid #171717' }}>
         <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', overflowX: 'auto' }}>
           <nav className="nav-tabs">
-            <button
-              className={`nav-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <LayoutDashboard size={14} />
-              <span>Front Page</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'feed' ? 'active' : ''}`}
-              onClick={() => setActiveTab('feed')}
-            >
-              <Compass size={14} />
-              <span>Live Wire</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'intelligence' ? 'active' : ''}`}
-              onClick={() => setActiveTab('intelligence')}
-            >
-              <TrendingUp size={14} />
-              <span>Stocks</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'market' ? 'active' : ''}`}
-              onClick={() => setActiveTab('market')}
-            >
-              <Layers size={14} />
-              <span>Sectors</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'analyzer' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analyzer')}
-            >
-              <Sparkles size={14} />
-              <span>AI Catalyst Decoder</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'watchlist' ? 'active' : ''}`}
-              onClick={() => setActiveTab('watchlist')}
-            >
-              <Bookmark size={14} />
-              <span>Watchlist ({watchlist.length})</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'ml' ? 'active' : ''}`}
-              onClick={() => setActiveTab('ml')}
-            >
-              <Brain size={14} />
-              <span>ML Models</span>
-            </button>
-
-            <button
-              className={`nav-tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <Settings size={14} />
-              <span>Settings</span>
-            </button>
+            {[
+              { id: 'dashboard', label: 'Front Page', icon: LayoutDashboard },
+              { id: 'feed', label: 'Live Wire', icon: Compass },
+              { id: 'intelligence', label: 'Stocks', icon: TrendingUp },
+              { id: 'market', label: 'Sectors', icon: Layers },
+              { id: 'analyzer', label: 'AI Catalyst Decoder', icon: Sparkles },
+              { id: 'watchlist', label: `Watchlist (${watchlist.length})`, icon: Bookmark },
+              { id: 'ml', label: 'ML Models', icon: Brain },
+              { id: 'settings', label: 'Settings', icon: Settings },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  className={`nav-tab-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {isActive && <span className="nav-bracket nav-bracket-left">[</span>}
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
+                  {isActive && <span className="nav-bracket nav-bracket-right">]</span>}
+                </button>
+              );
+            })}
           </nav>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#413D36', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', borderLeft: '1px solid #C9C1B5', paddingLeft: '16px' }}>

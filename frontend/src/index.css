@@ -341,43 +341,64 @@ h1, h2, h3, .headline-serif {
 .nav-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 14px;
   background: transparent;
-  padding: 0;
+  padding: 4px 0;
   border: none;
   overflow-x: auto;
+  flex: 1;
 }
 
 .nav-tab-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
-  border-radius: 0;
+  padding: 8px 14px;
+  border-radius: 4px;
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: var(--font-sans);
+  white-space: nowrap;
 }
 
 .nav-tab-btn:hover {
   color: var(--text-primary);
-  border-bottom-color: #C9C1B5;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .nav-tab-btn.active {
   color: #A71919;
-  border-bottom: 2px solid #A71919;
+  background: rgba(167, 25, 25, 0.07);
+  border: 1px solid rgba(167, 25, 25, 0.28);
+  border-radius: 4px;
   font-weight: 800;
-  background: transparent;
-  box-shadow: none;
+  box-shadow: 0 1px 3px rgba(167, 25, 25, 0.08);
+}
+
+.nav-bracket {
+  color: #A71919;
+  font-weight: 900;
+  font-size: 0.95rem;
+  line-height: 1;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+.nav-bracket-left {
+  margin-right: 2px;
+}
+
+.nav-bracket-right {
+  margin-left: 2px;
 }
 
 /* Ticker Tape Bar */
@@ -510,6 +531,9 @@ h1, h2, h3, .headline-serif {
 /* Responsive grid layouts */
 @media (max-width: 1024px) {
   .nav-tabs {
-    display: none;
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 4px;
   }
 }
