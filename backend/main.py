@@ -1801,3 +1801,26 @@ def get_chart_annotations(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch chart events: {str(e)}")
 
+
+# =====================================================================
+# PRODUCTION FRONTEND SPA SERVING (When frontend/dist exists)
+# =====================================================================
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+frontend_dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+if os.path.isdir(frontend_dist_dir):
+    assets_dir = os.path.join(frontend_dist_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="static_assets")
+
+    @app.get("/{catchall:path}")
+    async def serve_production_spa(catchall: str):
+        # Allow API and docs routes to pass through to FastAPI handlers
+        if catchall.startswith("api/") or catchall in ("docs", "redoc", "openapi.json"):
+            raise HTTPException(status_code=404, detail="Endpoint not found")
+        target_file = os.path.join(frontend_dist_dir, catchall)
+        if catchall and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        return FileResponse(os.path.join(frontend_dist_dir, "index.html"))
+
