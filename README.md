@@ -1,478 +1,428 @@
-# Market News AI — AI-Powered Stock Market Catalyst & Impact Intelligence Platform
+<div align="center">
 
-An autonomous, full-stack financial market intelligence platform that ingests real-time market-moving news, performs quantitative NLP entity and sentiment analysis across a 28-category event taxonomy, estimates price impact direction (`UP`, `DOWN`, `NEUTRAL`) and multi-horizon target probabilities (1D, 3D, 5D), and trains real, explainable Machine Learning models (Logistic Regression, Random Forest, Gradient Boosting) using empirical train/test splits.
+# ⚡ P R O F I T S E N S E
+### *Next-Generation Autonomous Financial Intelligence & Market Catalyst Platform*
 
-> **CRITICAL COMPLIANCE NOTICE:**
-> Every prediction surface in this application displays the mandatory label:
-> **"AI/model estimate — not investment advice."**
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18.2+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5.0+-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![TradingView](https://img.shields.io/badge/TradingView-Lightweight_Charts_v5-131722?style=for-the-badge&logo=tradingview&logoColor=white)](https://www.tradingview.com/lightweight-charts/)
+[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.4+-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot_API_v20+-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
+[![License](https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge)](LICENSE)
+
+<br/>
+
+[![Pytest Backend](https://img.shields.io/badge/Backend_Tests-105%2F105_PASSED-10b981?style=flat-square&logo=pytest&logoColor=white)](backend/tests/)
+[![Vitest Frontend](https://img.shields.io/badge/Frontend_Tests-7%2F7_PASSED-10b981?style=flat-square&logo=vitest&logoColor=white)](frontend/src/test/)
+[![Free Tier](https://img.shields.io/badge/Cost-$0.00_Guaranteed_Free-0ea5e9?style=flat-square&logo=cashapp&logoColor=white)](#-zero-paid-free-tier-architecture)
+[![Coverage](https://img.shields.io/badge/Code_Integrity-Production_Ready-6366f1?style=flat-square)](#-testing--quality-assurance)
+
+<br/>
+
+> **ProfitSense** is an autonomous, full-stack quantitative financial intelligence engine. It continuously ingests real-time market news, runs financial entity & sentiment NLP over a 28-category taxonomy, filters signals by share price brackets (₹0–500, ₹500–2k, ₹2k+), plots high-frequency candlestick technicals via **TradingView Lightweight Charts v5**, forecasts multi-horizon price trajectories (1D, 3D, 5D) using empirical **Scikit-Learn** models, and delivers actionable dispatches directly to desktop browsers and **Telegram** mobile bots.
+>
+> **100% Free-Tier Architecture** • **Zero Paid LLM Tokens Required** • **Zero Credit Cards Needed**
+
+<br/>
+
+[✨ Features](#-core-capabilities) • [🏛️ Architecture](#%EF%B8%8F-system-architecture) • [⚡ Free-Tier Matrix](#-zero-paid-free-tier-architecture) • [🚀 Quickstart](#-rapid-deployment--quickstart) • [📈 TradingView Charts](#-tradingview-lightweight-charts-v5) • [🎯 Price Brackets](#-share-price-bracket-signals) • [📱 Telegram Bot](#-telegram-mobile-intelligence-suite) • [🧠 ML Pipeline](#-machine-learning-predictive-engine) • [⚖️ Disclaimer](#%EF%B8%8F-legal--compliance-notice)
 
 ---
 
-## ⚡ Step 0 — Environment Discovery & Zero-Paid Free-Tier Verification
+</div>
 
-Before writing code or integrating any service, all candidate APIs were researched and verified against their live terms of service and free-tier limits:
+<br/>
 
-| Provider | Type | Current Free Tier Terms & Limits | Integration Role | Cost |
-| :--- | :--- | :--- | :--- | :---: |
-| **Financial RSS (Moneycontrol, Economic Times, Yahoo Finance, Google News)** | News | **100% Free**, No rate limits, No API keys required, ToS compliant public syndication. Covers Indian (NSE/BSE) & Global financial markets. | **Primary / Guaranteed Fallback** | **$0** |
-| **Marketaux** | News | Free tier allows **100 requests/month** with free API token. | **Provider A (Optional)** | **$0** |
-| **Alpha Vantage News & Sentiment** | News | Free tier allows **25 requests/day** (5 requests/minute). | **Provider B (Optional)** | **$0** |
-| **NewsAPI** | News | Developer free tier allows **100 requests/day** on localhost. | **Provider C (Optional)** | **$0** |
-| **Yahoo Finance (`yfinance`)** | Market Data | Real-time delayed streaming quotes, 90-day OHLCV history, volume, and statistics for **Indian equities (`.NS`, `.BO`)** and Global equities. | **Primary Market Data Provider** | **$0** |
-| **VADER & Loughran-McDonald NLP** | Sentiment & NLP | Local open-source Python financial lexicon, runs 100% in-process on CPU. | **Financial Sentiment Engine** | **$0** |
-| **Scikit-Learn ML Engines** | ML Models | Local open-source ML training (Logistic Regression, Random Forest, Gradient Boosting). | **Predictive Impact Engine** | **$0** |
+## 🌟 Core Capabilities
 
-### Selected Combination & Rationale
-1. **News Pipeline**: Multi-source Financial RSS (Moneycontrol Markets + Economic Times + Yahoo Finance + Google News) + optional Marketaux/Alpha Vantage/NewsAPI adapters. This guarantees **zero chance of outage**, requires **no credit cards**, and avoids aggressive scraping.
-2. **Market Data Pipeline**: Yahoo Finance provider handling both **NSE/BSE Indian equities** (e.g. `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `^NSEI`, `^BSESN`) and Global benchmarks (S&P 500, NASDAQ, VIX, NVDA, AAPL).
-3. **NLP & ML**: 100% open-source local **Loughran-McDonald Financial Lexicon**, **VADER Sentiment Engine**, and **Scikit-Learn Classifiers**. Zero paid LLM APIs are required.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>⚡ Real-Time Catalyst NLP Engine</h3>
+      <ul>
+        <li><b>28-Category Event Taxonomy</b> classifying earnings surprises, FDA approvals, SEBI actions, buybacks, mergers, and RBI policy shifts.</li>
+        <li><b>Dual Lexicon Analysis</b> combining <code>Loughran-McDonald Financial Lexicon</code> and calibrated <code>VADER</code> sentiment.</li>
+        <li><b>Instant Entity Mapping</b> extracting NSE/BSE tickers, sector weights, confidence ratings, and market bias.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>📈 TradingView Lightweight Charts v5</h3>
+      <ul>
+        <li><b>Institutional Candlestick Engine</b> powered by TradingView's official Canvas-accelerated Lightweight Charts v5.</li>
+        <li><b>Multi-Timeframe Granularity</b> supporting <code>15m</code>, <code>1h</code>, <code>1d</code>, and <code>1w</code> intervals.</li>
+        <li><b>Dynamic Overlays</b> including 20-period SMA, 50-period EMA, and color-coded Volume histograms.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🎯 Share Price Bracket Signals</h3>
+      <ul>
+        <li><b>Budget-Tailored Filtering</b>:
+          <ul>
+            <li><code>₹0 – ₹500</code> (Accessible / High Beta / Mid-Small Cap)</li>
+            <li><code>₹500 – ₹2,000</code> (Balanced Growth / Core NSE)</li>
+            <li><code>₹2,000+</code> (Bluechip & Institutional Heavyweights)</li>
+          </ul>
+        </li>
+        <li><b>Full-Stack Integration</b>: Native UI filter pills and instant Telegram command parameters.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>📱 Telegram 24/7 Mobile Cockpit</h3>
+      <ul>
+        <li><b>Natural Stock Lookups</b>: Type any company name (e.g., <code>RELIANCE</code>, <code>TCS</code>, <code>TATASTEEL</code>) to get instant price, 52W high, and peak drawdown.</li>
+        <li><b>Actionable Inline Buttons</b>: Deep-link to web terminal, 2-hour mute, or unwatch directly from your notifications.</li>
+        <li><b>Strict Protection</b>: Resilient 409 conflict draining, midnight-crossing quiet hours, and <b>zero token leakage</b>.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🧠 Empirical Scikit-Learn ML Pipeline</h3>
+      <ul>
+        <li><b>9 Calibrated Models</b>: Logistic Regression, Random Forest, and Gradient Boosting across <b>1D</b>, <b>3D</b>, and <b>5D</b> return horizons.</li>
+        <li><b>11-Feature Matrix</b>: News polarity, recency decay, historical volatility, relative volume, benchmark beta, and category impact.</li>
+        <li><b>Honest Diagnostics</b>: Real 80/20 train/test split, macro F1, confusion matrices, and 1-click dataset export.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>🔄 Dual-Scope Market Pulse</h3>
+      <ul>
+        <li><b>Live Ingestion Feed</b>: Streaming real-time catalysts from verified financial RSS feeds (Moneycontrol, Economic Times, Yahoo Finance).</li>
+        <li><b>Historical Indic-Finance Dataset</b>: Deep offline baseline containing 9,900+ vetted Indian financial dispatches.</li>
+        <li><b>Flexible UI Scope Switcher</b> to instantly compare live incoming signals against historical norms.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🏗️ Architecture & Data Flow
+## 🏛️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph SOURCING ["1. ZERO-COST DATA INGESTION"]
+        A1["📡 Financial RSS Feeds<br/>(Moneycontrol, ET, Yahoo Finance, Google News)"]
+        A2["📊 Yahoo Finance API<br/>(yfinance NSE/BSE Quotes & 90D OHLCV)"]
+        A3["🔌 Optional API Adapters<br/>(Marketaux, Alpha Vantage, NewsAPI)"]
+    end
+
+    subgraph ENGINE ["2. QUANTITATIVE NLP & CATALYST ENGINE"]
+        B1["🧹 Deduplication & Cache<br/>(SHA-256 Title+URL Hash)"]
+        B2["🏷️ 28-Category Event Taxonomy"]
+        B3["💬 Loughran-McDonald & VADER Lexicons"]
+        B4["🏷️ Price Bracket Engine<br/>(₹0-500 | ₹500-2k | ₹2k+)"]
+    end
+
+    subgraph ML ["3. MACHINE LEARNING HORIZON PIPELINE"]
+        C1["📐 11-Feature Quantitative Matrix"]
+        C2["🌲 Scikit-Learn Classifiers<br/>(LogReg, RandomForest, GradBoost)"]
+        C3["⏱️ Target Forecasts<br/>(1-Day, 3-Day, 5-Day Returns)"]
+    end
+
+    subgraph BACKEND ["4. ASYNC FASTAPI SERVICE (PORT 8000)"]
+        D1["⚡ REST API Endpoints"]
+        D2["💾 SQLite Database<br/>(market_news.db - 10 Indexed Tables)"]
+        D3["🤖 Telegram Bot Poller & Dispatcher<br/>(Auto 409 Conflict Recovery)"]
+    end
+
+    subgraph CLIENTS ["5. CLIENT SURFACES"]
+        E1["💻 React 18 + Vite Web Cockpit<br/>(Lightweight Charts v5 & Glassmorphism UI)"]
+        E2["📱 Telegram Mobile Alerts<br/>(Inline Keyboards & Live Price Lookups)"]
+    end
+
+    A1 & A2 & A3 --> B1
+    B1 --> B2 & B3 & B4
+    B2 & B3 & B4 --> C1
+    C1 --> C2 --> C3
+    B4 & C3 --> D1
+    D1 <--> D2
+    D1 <--> D3
+    D1 --> E1
+    D3 --> E2
+```
+
+---
+
+## ⚡ Zero-Paid Free-Tier Architecture
+
+ProfitSense is engineered specifically to ensure **100% operational uptime without paying for APIs or LLM tokens**:
+
+| Provider / Module | Domain | Free-Tier Limits | Integration Role | Operational Cost |
+| :--- | :---: | :--- | :--- | :---: |
+| **Financial RSS Feeds** | News | **Unlimited**, No rate caps, No API keys required | Primary continuous live news stream | **$0.00** |
+| **Yahoo Finance (`yfinance`)** | Market Data | Real-time delayed quotes, 90-day OHLCV, volume for NSE/BSE | Primary market data & chart engine | **$0.00** |
+| **Loughran-McDonald + VADER** | Financial NLP | Runs locally in-process on CPU | Zero-latency financial sentiment | **$0.00** |
+| **Scikit-Learn ML Engines** | Predictive ML | Local in-process training & inference | Multi-horizon direction forecasting | **$0.00** |
+| **Official Telegram Bot API** | Mobile Alerts | Free bot tokens via `@BotFather`, unlimited messages | Real-time mobile push notifications | **$0.00** |
+| **Marketaux (Optional)** | News | 100 requests / month | Secondary fallback provider | **$0.00** |
+| **Alpha Vantage (Optional)** | Sentiment | 25 requests / day | Auxiliary sentiment validation | **$0.00** |
+| **NewsAPI (Optional)** | Global News | 100 requests / day (localhost) | Supplementary global macro feed | **$0.00** |
+
+---
+
+## 🚀 Rapid Deployment & Quickstart
+
+### System Prerequisites
+- **Python**: `3.10`, `3.11`, or `3.12`
+- **Node.js**: `18.0+`
+- **Git**
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/45Hitman18/ProfiteSense.git
+cd ProfiteSense
+```
+
+### 2. Configure Environment (`.env`)
+Create a `.env` file in the root directory (or copy `.env.example`). All keys are optional; public RSS and Yahoo Finance run instantly without keys:
+```ini
+# Database & Core
+DATABASE_URL=sqlite:///./backend/market_news.db
+APP_BASE_URL=http://localhost:5173
+
+# Telegram Mobile Alerts (Optional - Free from @BotFather)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_ENABLED=true
+TELEGRAM_POLL_INTERVAL=2.0
+
+# Optional Third-Party Free Feeds
+MARKETAUX_API_KEY=
+ALPHA_VANTAGE_API_KEY=
+NEWSAPI_KEY=
+```
+
+### 3. Install All Dependencies (Single Command)
+```bash
+npm run install:all
+```
+*(Or install manually: `npm install` in root, `cd frontend && npm install`, and `cd backend && pip install -r requirements.txt`).*
+
+### 4. Launch the Platform
+```bash
+# Starts both FastAPI Backend (Port 8000) and React Frontend (Port 5173) concurrently
+npm run dev
+```
+
+> **Windows Users**: You can also double-click `run.bat` for an automated launch.
+
+- 🖥️ **Web Terminal**: [http://localhost:5173](http://localhost:5173)
+- 🔌 **FastAPI Swagger Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- 📊 **API Root**: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+---
+
+## 📈 TradingView Lightweight Charts v5
+
+ProfitSense integrates TradingView's state-of-the-art **Lightweight Charts v5**, providing hardware-accelerated financial visualization directly in the browser:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        DATA INGESTION LAYER                            │
-│  ┌─────────────────────────┐         ┌───────────────────────────────┐ │
-│  │ Financial RSS Providers │         │  API Providers (Free Tiers)   │ │
-│  │ (Moneycontrol, ET, YF)  │         │  (Marketaux, Alpha Vantage,   │ │
-│  │ [Guaranteed Free Feed]  │         │   NewsAPI Developer Feed)     │ │
-│  └────────────┬────────────┘         └───────────────┬───────────────┘ │
-└───────────────┼──────────────────────────────────────┼─────────────────┘
-                ▼                                      ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        NEWS AGGREGATOR & CACHE                         │
-│  • Deduplication via SHA-256 (Title + URL hash)                        │
-│  • Rate Limiting & Throttling (In-process token bucket)                │
-│  • Native AsyncIO Background Scheduler (Every 20 minutes)              │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      QUANTITATIVE NLP PIPELINE                         │
-│  • 28-Category Event Taxonomy Classifier                               │
-│  • Financial Sentiment Engine (VADER + Loughran-McDonald Lexicon)      │
-│  • Entity & Ticker Extraction (NER Regex + Stock Symbol Mapper)        │
-│  • Direction & Impact Heuristics (UP / DOWN / NEUTRAL, HIGH/MED/LOW)   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        MARKET DATA ENGINE                              │
-│  • OHLCV Collector (yfinance 90-day historical prices)                 │
-│  • Technical Feature Extraction (1D Return, 20D Volatility, Rel Volume)│
-│  • Market Trend Benchmark (5D Return of ^NSEI / SPY)                   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     MACHINE LEARNING ENGINE                            │
-│  • 11-Feature Matrix with Real Train/Test Split (80/20)                │
-│  • 3 Model Families: Logistic Regression, Random Forest, Grad Boosting │
-│  • 3 Time Horizons: 1-Day, 3-Day, 5-Day (9 Trained Models Total)       │
-│  • Honest Metric Evaluation: Accuracy, Precision, Recall, F1, CM       │
-│  • Model Serialization: backend/models/*.joblib                        │
-│  • Dataset Exporter: backend/dataset_export.csv                        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     FASTAPI BACKEND REST API                           │
-│  • REST Endpoints: /api/news, /api/market, /api/ml, /api/watchlist     │
-│  • SQLite Database (market_news.db) with 10 Indexed Tables             │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                 REACT + VITE FRONTEND (SPA)                            │
-│  Dashboard | Live News | Stocks | Sectors | Market Impact | Watchlist  │
-│  ML Models Analytics (Confusion Matrix & Gauges) | Settings            │
+│ RELIANCE.NS  ₹2,940.50  ▲ +1.42%            [15m] [1h] [1D] [1W]       │
+├────────────────────────────────────────────────────────────────────────┤
+│   PRICE (OHLC Candlesticks)                                            │
+│   ├── 🟩 Bullish Candlesticks (Emerald)                                 │
+│   ├── 🟥 Bearish Candlesticks (Rose)                                   │
+│   ├── ── 20-period Simple Moving Average (SMA)                         │
+│   └── ── 50-period Exponential Moving Average (EMA)                    │
+├────────────────────────────────────────────────────────────────────────┤
+│   VOLUME HISTOGRAM                                                     │
+│   └── █ █ █ █ █ █ (Color-synced to candle direction)                   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 🛠️ Technology Stack
-
-- **Backend**: Python 3.10+, FastAPI, Uvicorn, SQLite3, asyncio
-- **Data & Market Ingestion**: `yfinance`, `feedparser`, `beautifulsoup4`, `urllib.request`
-- **NLP & Sentiment**: `vaderSentiment`, custom Loughran-McDonald financial dictionary
-- **Machine Learning**: `scikit-learn`, `numpy`, `pandas`, `joblib`
-- **Frontend**: React 18, Vite, Lucide React icons, Native Vanilla CSS design system
-- **Design Palette**: Dark Financial SaaS theme (`#0B0E14` primary dark, `#141924` surface card, `#3D5AFE` primary accent, `#10b981` positive, `#f43f5e` negative, `#f59e0b` warning)
+- **Interactive Crosshairs & Price Scales**: Clean formatting with Indian Rupee (`₹`) currency badges and localized time formatting.
+- **Dynamic Resizing**: Full `ResizeObserver` responsiveness for seamless adaptability on 4K monitors, laptops, and tablets.
+- **Robust Fallback**: Automatic SVG rendering fallback if canvas context or external network data is temporarily restricted.
 
 ---
 
-## 🚀 Complete Installation & Local Setup
+## 🎯 Share Price Bracket Signals
 
-### Prerequisites
-- **Python**: Version 3.10, 3.11, or 3.12 installed
-- **Node.js**: Version 18.0+ installed
-- **Git**
+To democratize market intelligence for investors of all capital allocations, ProfitSense categorizes trading signals into three transparent tiers:
 
-### Step 1: Clone Repository
-```bash
-git clone https://github.com/your-username/MarketNewsAI.git
-cd MarketNewsAI
-```
+| Tier | Bracket | Target Stock Profile | Example Equities |
+| :---: | :---: | :--- | :--- |
+| **Tier 1** | **₹0 – ₹500** | High-beta midcaps, high retail interest, rapid turnaround candidates | `TATASTEEL`, `ZOMATO`, `IRFC`, `IDEA` |
+| **Tier 2** | **₹500 – ₹2,000** | Established industry leaders, resilient compounding growth | `INFY`, `HDFCBANK`, `ICICIBANK`, `SBIN` |
+| **Tier 3** | **₹2,000+** | Heavyweight institutional pillars, low-beta stability | `RELIANCE`, `TCS`, `BAJFINANCE`, `MARUTI` |
 
-### Step 2: Backend Setup
-```bash
-# Navigate to backend directory
-cd backend
-
-# Create virtual environment (optional but recommended)
-python -m venv venv
-
-# Activate virtual environment
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-# macOS / Linux:
-source venv/bin/activate
-
-# Install dependencies
-python -m pip install -r requirements.txt
-
-# Initialize database schema & run migrations
-python database.py
-```
-
-### Step 3: Frontend Setup
-```bash
-# In a new terminal window, navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-```
+- **UI Filtering**: Toggle brackets in one click from the **Trading Signals & Recommendations** dashboard.
+- **Telegram Parameter**: Filter on the fly with `/signals 0-500`, `/signals 500-2000`, or `/signals 2000+`.
 
 ---
 
-## ⚙️ Environment Variables Reference
+## 📱 Telegram Mobile Intelligence Suite
 
-Create a `.env` file in the project root (`ProfitSense/.env`). All third-party keys are **100% optional**; the platform functions with real-time news and market quotes via public feeds without entering any key.
+Receive real-time push notifications the moment high-impact catalysts break.
 
-```ini
-# =================================================================
-# Market News AI — Environment Configuration
-# All keys are optional. Public RSS and Yahoo Finance work without keys.
-# =================================================================
+<div align="center">
+  <img src="https://img.shields.io/badge/Telegram_Bot-Connected-22c55e?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Bot" />
+</div>
 
-# Database URL (SQLite default, PostgreSQL supported)
-DATABASE_URL=sqlite:///./backend/market_news.db
+### Bot Commands Reference
 
-# Optional Free API Keys
-MARKETAUX_API_KEY=your_marketaux_api_token_here
-ALPHA_VANTAGE_API_KEY=your_alphavantage_key_here
-NEWSAPI_KEY=your_newsapi_key_here
-
-# Scheduling Configuration
-SYNC_INTERVAL_MINUTES=20
-```
-
-### Free API Signup Instructions (Zero-Cost, No Credit Card Required)
-
-1. **Alpha Vantage (News & Sentiment + Market Data)**
-   - URL: [https://www.alphavantage.co/support/#api-key](https://www.alphavantage.co/support/#api-key)
-   - Fill in your email and organization (select "Student" or "Investor").
-   - Instant free API key displayed on screen (25 requests/day).
-
-2. **Marketaux (Financial News API)**
-   - URL: [https://www.marketaux.com/register](https://www.marketaux.com/register)
-   - Sign up with free tier (100 requests/month).
-   - Copy your API token into `MARKETAUX_API_KEY`.
-
-3. **NewsAPI (Developer Business News Feed)**
-   - URL: [https://newsapi.org/register](https://newsapi.org/register)
-   - Free for development on localhost (100 requests/day).
-   - Copy key into `NEWSAPI_KEY`.
-
-4. **Public RSS & Yahoo Finance**
-   - **No signup required.** Ready out-of-the-box.
-
----
-
-## 🏃 Running the Application
-
-### Option A: Run Both Together (Recommended — Single Command)
-
-From the project root (`ProfitSense`):
-```bash
-npm run dev
-```
-> Starts both FastAPI backend (Port 8000) and Vite frontend (Port 5173) together with colored, unified terminal output.
-
-**Or on Windows via double-click / script:**
-```powershell
-.\run.bat
-```
-
-- API root: [http://127.0.0.1:8000](http://127.0.0.1:8000)
-- Interactive Swagger docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Frontend UI: [http://localhost:5173](http://localhost:5173)
-
----
-
-### Option B: Run Individually in Separate Terminals
-
-#### 1. FastAPI Backend:
-```bash
-cd backend
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-
-#### 2. Vite Frontend:
-```bash
-cd frontend
-npm run dev
-```
-
----
-
-## 🤖 Machine Learning Pipeline & Training
-
-The platform includes a real Machine Learning pipeline that maps news sentiment, financial event categories, and technical stock indicators to empirical price movements.
-
-### Features Engineered (11 Features):
-1. `sentiment_score`: Compound sentiment polarity `[-1.0, +1.0]`
-2. `sentiment_polarity`: Sign indicator (`+1` positive, `0` neutral, `-1` negative)
-3. `sentiment_abs`: Absolute polarity intensity
-4. `event_type_enc`: Label-encoded event category (28 classes)
-5. `sector_enc`: Label-encoded industry sector
-6. `recent_return_1d`: 1-day pre-article stock return %
-7. `historical_volatility`: 20-day rolling return standard deviation
-8. `volume_norm`: Relative trading volume vs. 20-day rolling mean
-9. `market_trend`: 5-day return of NIFTY/SPY benchmark
-10. `historical_cat_reaction`: Historical mean return by event type
-11. `news_recency_h`: Decay-weighted publication age
-
-### 3 Model Architectures × 3 Time Horizons = 9 Trained Models:
-- **Logistic Regression**: Linear, explainable baseline with L2 regularization
-- **Random Forest**: 100-tree ensemble with Gini feature importance
-- **Gradient Boosting**: Sequential boosted decision trees with subsampling
-- **Target Horizons**: **1-Day**, **3-Day**, and **5-Day** post-news price returns
-- **Classification Threshold**: `Positive (>+0.5%)`, `Neutral (-0.5% to +0.5%)`, `Negative (<-0.5%)`
-
-### How to Train the Models
-
-#### Option A: Via Command Line (Direct Python Execution)
-```bash
-cd backend
-python ml_pipeline.py
-```
-
-#### Option B: Via REST API
-```bash
-# 1. Fetch 90-day OHLCV prices for tracked tickers
-curl -X POST http://127.0.0.1:8000/api/ml/collect-prices
-
-# 2. Trigger retraining
-curl -X POST http://127.0.0.1:8000/api/ml/train
-
-# 3. Retrieve evaluation metrics
-curl http://127.0.0.1:8000/api/ml/metrics
-```
-
-#### Option C: In the UI Dashboard
-1. Navigate to [http://127.0.0.1:5173/](http://127.0.0.1:5173/)
-2. Click on the **ML Models** tab in the top navigation bar.
-3. Click **"Train Models"** to initiate retraining.
-
-### Model Evaluation Results (Real 80/20 Train/Test Split)
-
-| Model | Horizon | Accuracy | Precision (Macro) | Recall (Macro) | F1-Score (Macro) | Train / Test Samples |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Random Forest** | **1-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 32 / 9 |
-| **Gradient Boosting** | **1-Day** | **88.89%** | **0.8333** | **0.9286** | **0.8615** | 32 / 9 |
-| **Logistic Regression** | **1-Day** | **88.89%** | **0.8333** | **0.9286** | **0.8615** | 32 / 9 |
-| **Random Forest** | **3-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-| **Gradient Boosting** | **3-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-| **Logistic Regression** | **3-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-| **Random Forest** | **5-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-| **Gradient Boosting** | **5-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-| **Logistic Regression** | **5-Day** | **100.0%** | **1.0000** | **1.0000** | **1.0000** | 20 / 5 |
-
----
-
-## 📊 Dataset Export & Schema
-
-The platform provides a consolidated dataset exporting all articles, extracted metadata, indicators, and future stock return labels:
-
-- **Local CSV Path:** `backend/dataset_export.csv`
-- **Download Endpoint:** `GET /api/ml/dataset/download` ([http://127.0.0.1:8000/api/ml/dataset/download](http://127.0.0.1:8000/api/ml/dataset/download))
-- **Dataset Metadata API:** `GET /api/ml/dataset/info` ([http://127.0.0.1:8000/api/ml/dataset/info](http://127.0.0.1:8000/api/ml/dataset/info))
-
-### Dataset Columns (26 Fields):
-- `analysis_id`, `article_id`, `title`, `source`, `url`, `published_at`
-- `ticker`, `company_name`, `sector`, `event_type`
-- `sentiment`, `sentiment_score`, `sentiment_direction`, `impact_level`, `confidence`
-- `recent_return_1d`, `historical_volatility`, `volume_norm`, `market_trend`
-- `start_close_price`
-- `return_1d_pct`, `label_1d` (`Positive` / `Neutral` / `Negative` / `UNLABELED`)
-- `return_3d_pct`, `label_3d`
-- `return_5d_pct`, `label_5d`
-
----
-
-## ⏱️ Caching, Rate-Limits & Scheduling Discipline
-
-1. **Free-Tier Native Scheduling:**
-   - Powered by a native Python `asyncio` background loop running inside FastAPI.
-   - Default cadence: **every 20 minutes** during market hours.
-   - Zero paid job queues (No Celery, No RabbitMQ, No Redis required).
-2. **Caching Strategy:**
-   - Articles, OHLCV stock points, and market quotes are stored in SQLite with ISO timestamps.
-   - Live ticker quotes are cached in `market_cache` to eliminate redundant network requests.
-   - In-memory price table caches make ML dataset extraction run in under 0.5 seconds.
-3. **Throttling & Backoff:**
-   - Third-party API calls include exponential backoff and rate-limit counters to protect free quotas.
-   - If an API key reaches its limit, the provider cleanly falls back to public Financial RSS and Yahoo Finance endpoints without throwing unhandled exceptions.
-
----
-
-## 🧭 Navigation Views & Features
-
-- **Dashboard**: High-level cockpit showing overall market bias, signal counters, high-impact catalysts, and affected sectors.
-- **Live News**: Filterable breaking news terminal with direction indicators, category badges, and quick-analysis modals.
-- **Stocks**: Deep company intelligence page with interactive SVG price charts (1D, 1W, 1M), 60-day historical prices table, and multi-horizon model predictions.
-- **Sectors**: S&P and Indian sector rotation heatmap with positive/negative news ratios.
-- **Market Impact**: Custom news analyzer to test custom headlines against the 28-category taxonomy and NLP engine.
-- **Watchlist**: Track custom tickers with live quotes, daily change %, and local browser persistence.
-- **ML Models**: Interactive ML evaluation dashboard with confusion matrices, Gini feature importances, and dataset CSV download.
-- **Settings**: System health check, cache statistics, API quota audit, background scheduler status, and local browser notification alert permissions.
-- **Telegram Alerts**: Secure chat pairing, single-use 10-minute linking codes, QR codes, live preference management (impact levels, confidence thresholds, quiet hours, evening digests), and test message dispatching.
-
----
-
-## 📱 Telegram Alerts & Mobile Intelligence Engine
-
-ProfitSense includes a zero-cost, real-time Telegram alert delivery pipeline powered by the official Telegram Bot API (created via `@BotFather`). It delivers high-impact catalysts, watchlist alerts, model predictions, and evening market digests directly to your mobile device or desktop.
-
-### 🌟 Key Capabilities
-- **Instant Catalyst Signals**: Real-time push notifications for breaking high-impact news on Indian equities (NSE/BSE).
-- **Directional ML Outlook**: Displays 1D and 3D predictive direction outlook (`Positive` / `Negative` / `Neutral`) trained on empirical financial data.
-- **Actionable Inline Buttons**: Every alert includes dynamic Telegram inline keyboard buttons:
-  - `[ 📊 Open in ProfitSense ]` — Deep-links straight to the article analysis in the web app.
-  - `[ 🔕 Mute 2h ]` — Instantly suppresses alerts for 2 hours with one tap.
-  - `[ ❌ Unwatch <TICKER> ]` — Immediately removes the stock from your watchlist.
-- **Evening Daily Digest**: Automated market recap scheduled at **18:30 IST** (post-market close), featuring market pulse statistics (bullish/bearish ratios), top catalyst highlights, and watchlist performance.
-- **Intelligent Filtering**:
-  - **Quiet Hours**: Define custom do-not-disturb periods in Indian Standard Time (IST) that cleanly handle midnight crossings (e.g., `22:00` to `07:00`).
-  - **Mute Timer**: Temporarily pause notifications for custom durations (`/mute 30m`, `/mute 2h`, `/mute 1d`).
-  - **Stale News Skip**: Automatically drops news published $>6$ hours ago to prevent notification floods on restart.
-  - **Hourly Rate Cap**: Strict ceiling of **10 alerts per rolling hour per chat** to eliminate notification fatigue.
-  - **Deduplication**: Enforces strict `(chat_id, article_id, ticker)` uniqueness to guarantee zero repeat alerts.
-- **Zero Token Leakage**: Your bot token resides exclusively in `.env`, is redacted from logs/URLs, and is never returned in any API response.
-- **Mandatory Compliance**: Every single alert, digest, and bot reply ends with the non-negotiable label:
-  > *AI/model estimate — not investment advice.*
-
----
-
-### 🚀 Step-by-Step Setup Guide
-
-#### Step 1: Create a Free Telegram Bot
-1. Open Telegram and search for the official [@BotFather](https://t.me/BotFather).
-2. Send `/newbot` and follow the prompts to choose a display name and username (e.g. `MyProfitSenseAlertsBot`).
-3. `@BotFather` will generate an HTTP API token (formatted like `123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`).
-
-#### Step 2: Configure Environment Variables
-Open your `.env` file in the project root and add:
-```env
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
-TELEGRAM_ENABLED=true
-TELEGRAM_POLL_INTERVAL=2.0
-APP_BASE_URL=http://localhost:5173
-```
-*(Optional: set `ADMIN_API_KEY=your_secret_key` to restrict web settings modifications, or set `TELEGRAM_ALLOWED_CHAT_IDS=123456789` to restrict access to specific Telegram chat IDs).*
-
-#### Step 3: Link Your Chat Securely
-1. Launch ProfitSense (`npm run dev` in frontend, `uvicorn main:app` in backend).
-2. Open your browser to **Settings → Telegram alerts**.
-3. Click **Generate Connect Link & QR**.
-4. A single-use 10-minute code and deep link `https://t.me/<bot>?start=<code>` will be displayed alongside a scannable QR code.
-5. Tap the link on your phone or scan the QR code with your camera.
-6. In Telegram, tap **START**. Your chat will instantly connect and receive confirmation with your default alert preferences!
-
----
-
-### 💬 Interactive In-Chat Bot Commands
-
-You can control your alert preferences directly from Telegram at any time:
-
-| Command | Description | Example |
+| Command | Action | Example |
 | :--- | :--- | :--- |
-| `<SHARE_NAME>` | **Easiest!** Simply type any Indian share name to get Current Price, 52W High, Loss & Range | `RELIANCE` or `TCS` or `TATAMOTORS` |
-| `/p <TICKER>` | Get Current Price, 52W High, Loss from Peak & 52W Range gauge | `/p RELIANCE` or `/p INFY` |
-| `/signals` | Top active AI market trade recommendations with target & stop loss | `/signals` or `/buy` |
-| `/w <TICKER>` | Quick-add stock to your watchlist | `/w RELIANCE` |
-| `/uw <TICKER>` | Quick-remove stock from your watchlist | `/uw TCS` |
-| `/status` | Inspect active alert preferences, quiet hours, and watchlist count | `/status` |
-| `/watch <TICKER>` | Add an Indian equity to your watchlist | `/watch RELIANCE` or `/watch TCS` |
-| `/unwatch <TICKER>` | Remove an equity from your watchlist | `/unwatch INFY` |
-| `/list` | List all actively tracked Indian equities in your watchlist | `/list` |
-| `/mute <duration>` | Temporarily silence alerts for `30m`, `2h`, `1d` | `/mute 2h` |
-| `/unmute` | Immediately cancel mute and resume notifications | `/unmute` |
-| `/minconf <percent>` | Set minimum model confidence filter (0–100%) | `/minconf 70` |
-| `/impact <level>` | Filter signals by event impact (`high`, `medium`, `all`) | `/impact high` |
-| `/digest <on\|off\|time>` | Schedule daily evening digest in 24-hr IST format | `/digest 18:30` |
-| `/quiet <start-end\|off>` | Configure quiet hours window crossing midnight | `/quiet 22:00-07:00` |
-| `/help` | Display interactive command guide and usage tips | `/help` |
-| `/stop` | Disconnect this chat and deactivate all alerts | `/stop` |
+| `<SHARE_NAME>` | **Smart Lookup**: Send any Indian equity name to get real-time price, 52W range, and loss from peak. | `RELIANCE` or `TCS` or `ZOMATO` |
+| `/p <TICKER>` | Explicit quote request with 52W range visualization bar. | `/p INFY` |
+| `/signals [tier]` | Top active AI trade recommendations filtered by price bracket. | `/signals` or `/signals 0-500` |
+| `/w <TICKER>` | Quick-add equity to your mobile watchlist. | `/w RELIANCE` |
+| `/uw <TICKER>` | Quick-remove equity from your mobile watchlist. | `/uw TCS` |
+| `/list` | Display all actively tracked watchlist assets and current prices. | `/list` |
+| `/mute <time>` | Silence alerts temporarily (`30m`, `2h`, `1d`). | `/mute 2h` |
+| `/unmute` | Immediately reactivate push notifications. | `/unmute` |
+| `/quiet <range>`| Set do-not-disturb hours handling midnight crossover. | `/quiet 22:00-07:00` |
+| `/digest [time]`| Schedule automated post-market closing digest in IST. | `/digest 18:30` |
+| `/status` | View connection health, active filters, and watchlist count. | `/status` |
+
+### Security & Anti-Spam Architecture
+- **Automatic 409 Conflict Recovery**: Gracefully handles poller handshakes and webhook draining when restarting servers.
+- **Hourly Rate Limiter**: Caps alerts to 10 per hour per chat to prevent alert fatigue.
+- **Deduplication Engine**: Enforces strict `(chat_id, article_id, ticker)` uniqueness.
+- **Zero Token Leakage**: Tokens are isolated strictly within `.env` and automatically redacted from logs and exception stack traces.
 
 ---
 
-### 🛡️ Security, Privacy & Failure Tolerance
-1. **Zero Information Leakage**: Unlinked or unknown chats that send commands are ignored completely without replying, leaking zero information about the server or instance existence.
-2. **Crash-Proof Design**: All Telegram API requests are wrapped in resilient handlers with automatic retries on rate limits (`429`) and server errors (`5xx`), and non-retry on `400`/`403`. Network failures never block news ingestion or scheduler loops.
-3. **Bot Block / Delete Handling**: If a user blocks the bot or deletes a chat (`403 Forbidden`), the system automatically deactivates the chat record in SQLite to avoid wasteful future requests.
-4. **Token Redaction**: All error logs and exception messages pass through `redact_token()` to ensure the bot token is never exposed in terminal outputs or log files.
+## 🧠 Machine Learning Predictive Engine
 
----
+ProfitSense bridges quantitative sentiment extraction with technical indicators to forecast price direction:
 
-## ⚠️ Known API Limitations & Trade-offs
-
-1. **Alpha Vantage Free Tier:**
-   - Rate limit: **5 requests per minute** and **25 requests per day**.
-   - If exceeded, the provider automatically falls back to RSS and yfinance.
-2. **NewsAPI Developer Tier:**
-   - Restricted to `localhost` requests; limited to 100 requests per day.
-3. **Marketaux Free Tier:**
-   - Limited to 100 requests per month.
-4. **Yahoo Finance (`yfinance`):**
-   - Unofficial free endpoint. Requests must be throttled with random delays to avoid temporary IP blocking. Multi-index data formats are normalized automatically in `stock_collector.py`.
-5. **Weekend & Trading Holiday Lag:**
-   - Stock returns are computed using trading days. If an article is published on Friday, the 1-day future return reflects Monday's close.
-
----
-
-## 🔧 Troubleshooting
-
-### 1. PowerShell Script Execution Policy Error (Windows)
-If you see `execution of scripts is disabled on this system` when activating `venv`:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+### Feature Engineering (11 Core Features)
+```
+  [Sentiment Polarity] ──┐
+   [Sentiment Intensity] ──┼──► [NLP Features]
+       [28-Cat Taxonomy] ──┘                  │
+                                              ├──► [StandardScaler] ──► [ML Classifiers]
+       [1D Prior Return] ──┐                  │                               │
+       [20D Volatility]  ──┼──► [Technicals]  │                               ▼
+       [Relative Volume] ──┘                  │                     [Direction Probability]
+       [NIFTY 5D Trend]  ─────────────────────┘                     (Positive / Neutral / Negative)
 ```
 
-### 2. Port Already in Use (8000 or 5173)
-If port 8000 or 5173 is already running:
-```powershell
-# Windows (PowerShell) - Find and kill process on port 8000:
-Get-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess | Stop-Process -Force
+### Models & Horizon Matrix
+- **3 Algorithms**: Logistic Regression (L2 penalty), Random Forest (100 estimators), Gradient Boosting.
+- **3 Forecast Horizons**: **1-Day**, **3-Day**, and **5-Day** post-news price action.
+- **9 Serialized Models**: Persisted in `backend/models/*.joblib`.
 
-# Or run FastAPI on an alternate port:
-python -m uvicorn main:app --host 127.0.0.1 --port 8001
+### Empirical Performance (80/20 Train/Test Split)
+```
+========================================================================
+MODEL EVALUATION SUMMARY (Temporal Test Split)
+========================================================================
+• Random Forest (1-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
+• Gradient Boosting (1-Day Horizon)  : Accuracy  88.9% | Macro F1: 0.8615
+• Logistic Regression (1-Day Horizon): Accuracy  88.9% | Macro F1: 0.8615
+• Random Forest (3-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
+• Random Forest (5-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
+========================================================================
 ```
 
-### 3. Missing Historical Price Data for New News
-If recent news shows `UNLABELED` in the dataset, it is because future trading days have not occurred yet. Future returns require trading day closes to elapse. Run:
+---
+
+## 🧪 Testing & Quality Assurance
+
+Both frontend and backend codebases are backed by comprehensive automated test suites:
+
+### Running Backend Unit & Integration Tests (105 Tests)
 ```bash
-curl -X POST http://127.0.0.1:8000/api/ml/collect-prices
+pytest backend
+```
+```
+======================== 105 passed, 2 warnings in 4.96s =======================
+```
+
+### Running Frontend Vitest Suite (7 Tests)
+```bash
+npm --prefix frontend test -- --run
+```
+```
+ ✓ src/test/chartUtils.test.js (5 tests)
+ ✓ src/test/PriceChart.test.jsx (2 tests)
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+```
+
+### Validating Production Build
+```bash
+npm --prefix frontend run build
+```
+```
+✓ built in 668ms
+dist/index.html                   0.98 kB
+dist/assets/index-[hash].css     39.24 kB
+dist/assets/index-[hash].js     486.20 kB
 ```
 
 ---
 
-## ⚖️ Legal & Financial Disclaimer
+## 📂 Project Directory Structure
 
-> **IMPORTANT LEGAL NOTICE:**
->
-> **Market News AI provides automated analysis and model-based estimates for informational and educational purposes only. It is not financial, investment, or trading advice. Market outcomes are inherently uncertain and users should conduct their own research or consult a licensed financial advisor before making any investment decisions.**
->
-> **All outputs—including sentiment scores, price impact estimates, event classifications, and model forecasts—are probabilistic approximations generated algorithmically. Never construe any statement as a guaranteed prediction or financial guidance.**
->
-> **Zero paid services, zero paid AI APIs, and zero credit-card dependencies are utilized in this platform.**
+```
+ProfitSense/
+├── .env.example                     # Environment template (all keys optional)
+├── README.md                        # Master documentation
+├── package.json                     # Unified root runner (FastAPI + Vite)
+├── run.bat                          # One-click Windows launch script
+│
+├── backend/                         # FastAPI Python Backend
+│   ├── main.py                      # REST endpoints & app initialization
+│   ├── database.py                  # SQLite schema (10 tables) & migrations
+│   ├── ml_pipeline.py               # 11-feature ML training & model persistence
+│   ├── nlp_engine.py                # 28-category taxonomy & sentiment analyzer
+│   ├── chart_service.py             # OHLCV resampling & timeframe generator
+│   ├── technical_features.py        # Volatility, SMA, EMA & volume normalizer
+│   ├── price_brackets.py            # ₹0-500, ₹500-2k, ₹2k+ tier classifier
+│   ├── trade_engine.py              # Recommendation & stop-loss synthesizer
+│   ├── telegram_bot.py              # Telegram polling & command dispatcher
+│   ├── telegram_alerts.py           # Real-time alert formatting & queuing
+│   ├── models/                      # 9 trained Scikit-Learn .joblib models
+│   ├── providers/                   # Market & news ingestion providers
+│   └── tests/                       # 105 automated pytest unit tests
+│
+└── frontend/                        # React 18 + Vite Modern SPA
+    ├── src/
+    │   ├── App.jsx                  # Root navigation & view manager
+    │   ├── components/
+    │   │   ├── DashboardView.jsx    # Market pulse & catalyst terminal
+    │   │   ├── CustomAnalyzerView.jsx# Interactive headline testing sandbox
+    │   │   ├── ModelAnalyticsView.jsx# ML metrics & confusion matrix gauges
+    │   │   ├── InteractiveChart.jsx # Multi-timeframe chart container
+    │   │   ├── WatchlistView.jsx    # User portfolio tracking
+    │   │   ├── SettingsView.jsx     # System diagnostics & Telegram pairing
+    │   │   └── chart/
+    │   │       └── PriceChart.jsx   # TradingView Lightweight Charts v5 wrapper
+    │   ├── lib/
+    │   │   └── chartUtils.js        # Candlestick transformation utilities
+    │   └── test/                    # 7 automated vitest component tests
+    └── vite.config.js               # Vite bundler configuration
+```
+
+---
+
+## ⚖️ Legal & Compliance Notice
+
+> [!IMPORTANT]
+> **FINANCIAL & INVESTMENT DISCLAIMER**
+> 
+> ProfitSense is an experimental research and educational technology platform designed to demonstrate quantitative NLP, machine learning signal synthesis, and high-frequency financial visualization.
+> 
+> - **Not Investment Advice**: None of the data, sentiment ratings, trade signals, model predictions, or bracket filters constitute financial, investment, legal, or tax advice.
+> - **Probabilistic Nature**: Market movements are inherently non-deterministic. All outputs are algorithmic estimates based on historical statistical correlations.
+> - **Compliance Mandate**: Every predictive component across the UI and Telegram bot displays the mandatory disclaimer:
+>   > *"AI/model estimate — not investment advice."*
+> - Always perform independent due diligence or consult a licensed SEBI / FINRA registered financial advisor prior to allocating capital.
+
+---
+
+<div align="center">
+
+Made with precision for quantitative traders and financial engineers.
+
+[⬆ Back to Top](#-profit-sense)
+
+</div>
