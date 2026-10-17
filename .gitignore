@@ -46,6 +46,8 @@ htmlcov/
 # SQLite databases (contain live data — exclude from VCS)
 backend/market_news.db
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 indic_finance_data/

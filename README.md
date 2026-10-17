@@ -1,99 +1,158 @@
 <div align="center">
 
-# ⚡ P R O F I T S E N S E
-### *Next-Generation Autonomous Financial Intelligence & Market Catalyst Platform*
+<img src="docs/assets/banner.svg" alt="ProfitSense — Autonomous Financial Intelligence & Market Catalyst Platform" width="100%"/>
 
-[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.10%20|%203.11%20|%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18.2+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5.0+-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![TradingView](https://img.shields.io/badge/TradingView-Lightweight_Charts_v5-131722?style=for-the-badge&logo=tradingview&logoColor=white)](https://www.tradingview.com/lightweight-charts/)
-[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.4+-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![Telegram](https://img.shields.io/badge/Telegram-Bot_API_v20+-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
-[![License](https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge)](LICENSE)
+[![Lightweight Charts](https://img.shields.io/badge/Lightweight_Charts-v5-131722?style=for-the-badge&logo=tradingview&logoColor=white)](https://www.tradingview.com/lightweight-charts/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4+-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot_API-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
-<br/>
+[![Backend Tests](https://img.shields.io/badge/backend_tests-105%2F105_passing-10b981?style=flat-square&logo=pytest&logoColor=white)](backend/tests/)
+[![Frontend Tests](https://img.shields.io/badge/frontend_tests-7%2F7_passing-10b981?style=flat-square&logo=vitest&logoColor=white)](frontend/src/test/)
+[![Cost](https://img.shields.io/badge/running_cost-$0-0ea5e9?style=flat-square&logo=cashapp&logoColor=white)](#-zero-cost-architecture)
+[![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f59e0b?style=flat-square)](#-contributing)
 
-[![Pytest Backend](https://img.shields.io/badge/Backend_Tests-105%2F105_PASSED-10b981?style=flat-square&logo=pytest&logoColor=white)](backend/tests/)
-[![Vitest Frontend](https://img.shields.io/badge/Frontend_Tests-7%2F7_PASSED-10b981?style=flat-square&logo=vitest&logoColor=white)](frontend/src/test/)
-[![Free Tier](https://img.shields.io/badge/Cost-$0.00_Guaranteed_Free-0ea5e9?style=flat-square&logo=cashapp&logoColor=white)](#-zero-paid-free-tier-architecture)
-[![Coverage](https://img.shields.io/badge/Code_Integrity-Production_Ready-6366f1?style=flat-square)](#-testing--quality-assurance)
+<h3>Turn market news into structured, explainable trading signals — for free.</h3>
 
-<br/>
+<p>
+ProfitSense ingests live financial news, classifies catalysts with a 28-category NLP engine,<br/>
+forecasts 1D / 3D / 5D direction with scikit-learn, and delivers it to a React terminal and your phone via Telegram.
+</p>
 
-> **ProfitSense** is an autonomous, full-stack quantitative financial intelligence engine. It continuously ingests real-time market news, runs financial entity & sentiment NLP over a 28-category taxonomy, filters signals by share price brackets (₹0–500, ₹500–2k, ₹2k+), plots high-frequency candlestick technicals via **TradingView Lightweight Charts v5**, forecasts multi-horizon price trajectories (1D, 3D, 5D) using empirical **Scikit-Learn** models, and delivers actionable dispatches directly to desktop browsers and **Telegram** mobile bots.
->
-> **100% Free-Tier Architecture** • **Zero Paid LLM Tokens Required** • **Zero Credit Cards Needed**
-
-<br/>
-
-[✨ Features](#-core-capabilities) • [🏛️ Architecture](#%EF%B8%8F-system-architecture) • [⚡ Free-Tier Matrix](#-zero-paid-free-tier-architecture) • [🚀 Quickstart](#-rapid-deployment--quickstart) • [📈 TradingView Charts](#-tradingview-lightweight-charts-v5) • [🎯 Price Brackets](#-share-price-bracket-signals) • [📱 Telegram Bot](#-telegram-mobile-intelligence-suite) • [🧠 ML Pipeline](#-machine-learning-predictive-engine) • [⚖️ Disclaimer](#%EF%B8%8F-legal--compliance-notice)
-
----
+[**Features**](#-features) ·
+[**Preview**](#-preview) ·
+[**Architecture**](#-architecture) ·
+[**Quickstart**](#-quickstart) ·
+[**Charts**](#-interactive-charts) ·
+[**Price Brackets**](#-price-brackets) ·
+[**Telegram**](#-telegram-bot) ·
+[**ML Engine**](#-machine-learning-engine) ·
+[**Disclaimer**](#%EF%B8%8F-disclaimer)
 
 </div>
 
 <br/>
 
-## 🌟 Core Capabilities
+---
+
+## 📖 Table of Contents
+
+<details>
+<summary><b>Click to expand</b></summary>
+
+1. [At a Glance](#-at-a-glance)
+2. [Preview](#-preview)
+3. [Features](#-features)
+4. [Architecture](#-architecture)
+5. [Zero-Cost Architecture](#-zero-cost-architecture)
+6. [Quickstart](#-quickstart)
+7. [Interactive Charts](#-interactive-charts)
+8. [Price Brackets](#-price-brackets)
+9. [Telegram Bot](#-telegram-bot)
+10. [Machine Learning Engine](#-machine-learning-engine)
+11. [Testing](#-testing)
+12. [Project Structure](#-project-structure)
+13. [Contributing](#-contributing)
+14. [License](#-license)
+15. [Disclaimer](#%EF%B8%8F-disclaimer)
+
+</details>
+
+---
+
+## 🎯 At a Glance
+
+<table align="center">
+  <tr>
+    <td align="center" width="16%"><h2>28</h2><sub>event categories</sub></td>
+    <td align="center" width="16%"><h2>9</h2><sub>ML models</sub></td>
+    <td align="center" width="16%"><h2>11</h2><sub>model features</sub></td>
+    <td align="center" width="16%"><h2>9,900+</h2><sub>historical dispatches</sub></td>
+    <td align="center" width="16%"><h2>112</h2><sub>automated tests</sub></td>
+    <td align="center" width="16%"><h2>$0</h2><sub>to run</sub></td>
+  </tr>
+</table>
+
+---
+
+## 🖼️ Preview
+
+<div align="center">
+
+### Web Terminal
+<img src="docs/assets/preview-dashboard.svg" alt="ProfitSense web terminal with candlestick chart and trading signals" width="92%"/>
+
+<br/><br/>
+
+### Telegram Cockpit
+<img src="docs/assets/preview-telegram.svg" alt="ProfitSense Telegram bot conversation" width="340"/>
+
+<sub>Previews use illustrative sample data. Drop real screenshots into <code>docs/assets/</code> (e.g. <code>screenshot-dashboard.png</code>) and swap the paths above.</sub>
+
+</div>
+
+---
+
+## ✨ Features
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h3>⚡ Real-Time Catalyst NLP Engine</h3>
+      <h3>⚡ Real-Time Catalyst NLP</h3>
       <ul>
-        <li><b>28-Category Event Taxonomy</b> classifying earnings surprises, FDA approvals, SEBI actions, buybacks, mergers, and RBI policy shifts.</li>
-        <li><b>Dual Lexicon Analysis</b> combining <code>Loughran-McDonald Financial Lexicon</code> and calibrated <code>VADER</code> sentiment.</li>
-        <li><b>Instant Entity Mapping</b> extracting NSE/BSE tickers, sector weights, confidence ratings, and market bias.</li>
+        <li><b>28-category taxonomy</b> — earnings surprises, FDA approvals, SEBI actions, buybacks, mergers, RBI policy shifts.</li>
+        <li><b>Dual-lexicon sentiment</b> — Loughran-McDonald financial lexicon plus calibrated VADER.</li>
+        <li><b>Entity mapping</b> — NSE/BSE tickers, sector weights, confidence ratings, market bias.</li>
       </ul>
     </td>
     <td width="50%" valign="top">
-      <h3>📈 TradingView Lightweight Charts v5</h3>
+      <h3>📈 Institutional Charts</h3>
       <ul>
-        <li><b>Institutional Candlestick Engine</b> powered by TradingView's official Canvas-accelerated Lightweight Charts v5.</li>
-        <li><b>Multi-Timeframe Granularity</b> supporting <code>15m</code>, <code>1h</code>, <code>1d</code>, and <code>1w</code> intervals.</li>
-        <li><b>Dynamic Overlays</b> including 20-period SMA, 50-period EMA, and color-coded Volume histograms.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>🎯 Share Price Bracket Signals</h3>
-      <ul>
-        <li><b>Budget-Tailored Filtering</b>:
-          <ul>
-            <li><code>₹0 – ₹500</code> (Accessible / High Beta / Mid-Small Cap)</li>
-            <li><code>₹500 – ₹2,000</code> (Balanced Growth / Core NSE)</li>
-            <li><code>₹2,000+</code> (Bluechip & Institutional Heavyweights)</li>
-          </ul>
-        </li>
-        <li><b>Full-Stack Integration</b>: Native UI filter pills and instant Telegram command parameters.</li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <h3>📱 Telegram 24/7 Mobile Cockpit</h3>
-      <ul>
-        <li><b>Natural Stock Lookups</b>: Type any company name (e.g., <code>RELIANCE</code>, <code>TCS</code>, <code>TATASTEEL</code>) to get instant price, 52W high, and peak drawdown.</li>
-        <li><b>Actionable Inline Buttons</b>: Deep-link to web terminal, 2-hour mute, or unwatch directly from your notifications.</li>
-        <li><b>Strict Protection</b>: Resilient 409 conflict draining, midnight-crossing quiet hours, and <b>zero token leakage</b>.</li>
+        <li><b>Lightweight Charts v5</b> — canvas-accelerated candlesticks.</li>
+        <li><b>Timeframes</b> — <code>15m</code>, <code>1h</code>, <code>1d</code>, <code>1w</code>.</li>
+        <li><b>Overlays</b> — 20-period SMA, 50-period EMA, colour-synced volume.</li>
       </ul>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <h3>🧠 Empirical Scikit-Learn ML Pipeline</h3>
+      <h3>🎯 Price-Bracket Signals</h3>
       <ul>
-        <li><b>9 Calibrated Models</b>: Logistic Regression, Random Forest, and Gradient Boosting across <b>1D</b>, <b>3D</b>, and <b>5D</b> return horizons.</li>
-        <li><b>11-Feature Matrix</b>: News polarity, recency decay, historical volatility, relative volume, benchmark beta, and category impact.</li>
-        <li><b>Honest Diagnostics</b>: Real 80/20 train/test split, macro F1, confusion matrices, and 1-click dataset export.</li>
+        <li><b>Budget-aware filtering</b> into three tiers: ₹0–500, ₹500–2,000, ₹2,000+.</li>
+        <li><b>Everywhere</b> — UI filter pills and Telegram command parameters.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>📱 Telegram 24/7 Cockpit</h3>
+      <ul>
+        <li><b>Natural lookups</b> — type <code>RELIANCE</code> for price, 52W range and drawdown.</li>
+        <li><b>Inline actions</b> — open web terminal, mute 2h, unwatch.</li>
+        <li><b>Hardened</b> — 409 conflict recovery, quiet hours, token redaction.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🧠 Scikit-Learn ML Pipeline</h3>
+      <ul>
+        <li><b>9 models</b> — Logistic Regression, Random Forest, Gradient Boosting × 1D / 3D / 5D.</li>
+        <li><b>11-feature matrix</b> — polarity, recency decay, volatility, relative volume, benchmark beta, category impact.</li>
+        <li><b>Transparent diagnostics</b> — 80/20 split, macro F1, confusion matrices, dataset export.</li>
       </ul>
     </td>
     <td width="50%" valign="top">
       <h3>🔄 Dual-Scope Market Pulse</h3>
       <ul>
-        <li><b>Live Ingestion Feed</b>: Streaming real-time catalysts from verified financial RSS feeds (Moneycontrol, Economic Times, Yahoo Finance).</li>
-        <li><b>Historical Indic-Finance Dataset</b>: Deep offline baseline containing 9,900+ vetted Indian financial dispatches.</li>
-        <li><b>Flexible UI Scope Switcher</b> to instantly compare live incoming signals against historical norms.</li>
+        <li><b>Live feed</b> — Moneycontrol, Economic Times, Yahoo Finance RSS.</li>
+        <li><b>Historical baseline</b> — 9,900+ vetted Indian financial dispatches.</li>
+        <li><b>Scope switcher</b> — compare live signals against historical norms.</li>
       </ul>
     </td>
   </tr>
@@ -101,44 +160,38 @@
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ Architecture
 
 ```mermaid
-flowchart TD
-    subgraph SOURCING ["1. ZERO-COST DATA INGESTION"]
-        A1["📡 Financial RSS Feeds<br/>(Moneycontrol, ET, Yahoo Finance, Google News)"]
-        A2["📊 Yahoo Finance API<br/>(yfinance NSE/BSE Quotes & 90D OHLCV)"]
-        A3["🔌 Optional API Adapters<br/>(Marketaux, Alpha Vantage, NewsAPI)"]
+flowchart LR
+    subgraph SRC ["① Zero-cost ingestion"]
+        A1["📡 RSS feeds<br/>Moneycontrol · ET · Yahoo · Google News"]
+        A2["📊 yfinance<br/>NSE/BSE quotes · 90D OHLCV"]
+        A3["🔌 Optional adapters<br/>Marketaux · Alpha Vantage · NewsAPI"]
     end
-
-    subgraph ENGINE ["2. QUANTITATIVE NLP & CATALYST ENGINE"]
-        B1["🧹 Deduplication & Cache<br/>(SHA-256 Title+URL Hash)"]
-        B2["🏷️ 28-Category Event Taxonomy"]
-        B3["💬 Loughran-McDonald & VADER Lexicons"]
-        B4["🏷️ Price Bracket Engine<br/>(₹0-500 | ₹500-2k | ₹2k+)"]
+    subgraph NLP ["② NLP & catalyst engine"]
+        B1["🧹 Dedup<br/>SHA-256 title+URL"]
+        B2["🏷️ 28-category taxonomy"]
+        B3["💬 Loughran-McDonald + VADER"]
+        B4["🎯 Price bracket engine"]
     end
-
-    subgraph ML ["3. MACHINE LEARNING HORIZON PIPELINE"]
-        C1["📐 11-Feature Quantitative Matrix"]
-        C2["🌲 Scikit-Learn Classifiers<br/>(LogReg, RandomForest, GradBoost)"]
-        C3["⏱️ Target Forecasts<br/>(1-Day, 3-Day, 5-Day Returns)"]
+    subgraph ML ["③ ML horizon pipeline"]
+        C1["📐 11-feature matrix"]
+        C2["🌲 LogReg · RF · GradBoost"]
+        C3["⏱️ 1D / 3D / 5D forecasts"]
     end
-
-    subgraph BACKEND ["4. ASYNC FASTAPI SERVICE (PORT 8000)"]
-        D1["⚡ REST API Endpoints"]
-        D2["💾 SQLite Database<br/>(market_news.db - 10 Indexed Tables)"]
-        D3["🤖 Telegram Bot Poller & Dispatcher<br/>(Auto 409 Conflict Recovery)"]
+    subgraph API ["④ FastAPI · :8000"]
+        D1["⚡ REST endpoints"]
+        D2["💾 SQLite<br/>10 indexed tables"]
+        D3["🤖 Telegram poller & dispatcher"]
     end
-
-    subgraph CLIENTS ["5. CLIENT SURFACES"]
-        E1["💻 React 18 + Vite Web Cockpit<br/>(Lightweight Charts v5 & Glassmorphism UI)"]
-        E2["📱 Telegram Mobile Alerts<br/>(Inline Keyboards & Live Price Lookups)"]
+    subgraph UI ["⑤ Clients"]
+        E1["💻 React 18 + Vite terminal"]
+        E2["📱 Telegram alerts"]
     end
-
     A1 & A2 & A3 --> B1
     B1 --> B2 & B3 & B4
-    B2 & B3 & B4 --> C1
-    C1 --> C2 --> C3
+    B2 & B3 & B4 --> C1 --> C2 --> C3
     B4 & C3 --> D1
     D1 <--> D2
     D1 <--> D3
@@ -148,281 +201,269 @@ flowchart TD
 
 ---
 
-## ⚡ Zero-Paid Free-Tier Architecture
+## 💸 Zero-Cost Architecture
 
-ProfitSense is engineered specifically to ensure **100% operational uptime without paying for APIs or LLM tokens**:
+Everything required to run ProfitSense is free. No credit card, no LLM tokens.
 
-| Provider / Module | Domain | Free-Tier Limits | Integration Role | Operational Cost |
+| Provider / Module | Domain | Free-tier limits | Role | Cost |
 | :--- | :---: | :--- | :--- | :---: |
-| **Financial RSS Feeds** | News | **Unlimited**, No rate caps, No API keys required | Primary continuous live news stream | **$0.00** |
-| **Yahoo Finance (`yfinance`)** | Market Data | Real-time delayed quotes, 90-day OHLCV, volume for NSE/BSE | Primary market data & chart engine | **$0.00** |
-| **Loughran-McDonald + VADER** | Financial NLP | Runs locally in-process on CPU | Zero-latency financial sentiment | **$0.00** |
-| **Scikit-Learn ML Engines** | Predictive ML | Local in-process training & inference | Multi-horizon direction forecasting | **$0.00** |
-| **Official Telegram Bot API** | Mobile Alerts | Free bot tokens via `@BotFather`, unlimited messages | Real-time mobile push notifications | **$0.00** |
-| **Marketaux (Optional)** | News | 100 requests / month | Secondary fallback provider | **$0.00** |
-| **Alpha Vantage (Optional)** | Sentiment | 25 requests / day | Auxiliary sentiment validation | **$0.00** |
-| **NewsAPI (Optional)** | Global News | 100 requests / day (localhost) | Supplementary global macro feed | **$0.00** |
+| **Financial RSS feeds** | News | No API key, no rate caps | Primary live news stream | **$0** |
+| **Yahoo Finance (`yfinance`)** | Market data | Delayed quotes, 90-day OHLCV, volume | Market data & chart engine | **$0** |
+| **Loughran-McDonald + VADER** | NLP | Runs locally on CPU | Financial sentiment | **$0** |
+| **scikit-learn** | ML | Local training & inference | Multi-horizon forecasts | **$0** |
+| **Telegram Bot API** | Alerts | Free token via `@BotFather` | Mobile push notifications | **$0** |
+| *Marketaux (optional)* | News | 100 requests / month | Fallback provider | **$0** |
+| *Alpha Vantage (optional)* | Sentiment | 25 requests / day | Sentiment validation | **$0** |
+| *NewsAPI (optional)* | Global news | 100 requests / day (localhost) | Macro feed | **$0** |
 
 ---
 
-## 🚀 Rapid Deployment & Quickstart
+## 🚀 Quickstart
 
-### System Prerequisites
-- **Python**: `3.10`, `3.11`, or `3.12`
-- **Node.js**: `18.0+`
-- **Git**
+**Prerequisites:** Python `3.10–3.12` · Node.js `18+` · Git
 
-### 1. Clone the Repository
 ```bash
+# 1 — Clone
 git clone https://github.com/45Hitman18/ProfiteSense.git
 cd ProfiteSense
+
+# 2 — Configure (every key is optional)
+cp .env.example .env
+
+# 3 — Install backend + frontend
+npm run install:all
+
+# 4 — Launch FastAPI (:8000) and React (:5173) together
+npm run dev
 ```
 
-### 2. Configure Environment (`.env`)
-Create a `.env` file in the root directory (or copy `.env.example`). All keys are optional; public RSS and Yahoo Finance run instantly without keys:
+> 🪟 **Windows:** double-click `run.bat` for a one-click launch.
+
+<details>
+<summary><b>⚙️ Environment variables</b></summary>
+
 ```ini
-# Database & Core
+# Core
 DATABASE_URL=sqlite:///./backend/market_news.db
 APP_BASE_URL=http://localhost:5173
 
-# Telegram Mobile Alerts (Optional - Free from @BotFather)
+# Telegram (optional — free from @BotFather)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_ENABLED=true
 TELEGRAM_POLL_INTERVAL=2.0
 
-# Optional Third-Party Free Feeds
+# Optional free news providers
 MARKETAUX_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 NEWSAPI_KEY=
 ```
 
-### 3. Install All Dependencies (Single Command)
+</details>
+
+<details>
+<summary><b>🔧 Manual install</b></summary>
+
 ```bash
-npm run install:all
-```
-*(Or install manually: `npm install` in root, `cd frontend && npm install`, and `cd backend && pip install -r requirements.txt`).*
-
-### 4. Launch the Platform
-```bash
-# Starts both FastAPI Backend (Port 8000) and React Frontend (Port 5173) concurrently
-npm run dev
+npm install
+cd frontend && npm install && cd ..
+cd backend && pip install -r requirements.txt
 ```
 
-> **Windows Users**: You can also double-click `run.bat` for an automated launch.
+</details>
 
-- 🖥️ **Web Terminal**: [http://localhost:5173](http://localhost:5173)
-- 🔌 **FastAPI Swagger Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- 📊 **API Root**: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+| Service | URL |
+| :--- | :--- |
+| 🖥️ Web terminal | http://localhost:5173 |
+| 📘 Swagger docs | http://127.0.0.1:8000/docs |
+| 🔌 API root | http://127.0.0.1:8000 |
 
 ---
 
-## 📈 TradingView Lightweight Charts v5
+## 📈 Interactive Charts
 
-ProfitSense integrates TradingView's state-of-the-art **Lightweight Charts v5**, providing hardware-accelerated financial visualization directly in the browser:
+Hardware-accelerated candlesticks powered by **TradingView Lightweight Charts v5**.
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│ RELIANCE.NS  ₹2,940.50  ▲ +1.42%            [15m] [1h] [1D] [1W]       │
-├────────────────────────────────────────────────────────────────────────┤
-│   PRICE (OHLC Candlesticks)                                            │
-│   ├── 🟩 Bullish Candlesticks (Emerald)                                 │
-│   ├── 🟥 Bearish Candlesticks (Rose)                                   │
-│   ├── ── 20-period Simple Moving Average (SMA)                         │
-│   └── ── 50-period Exponential Moving Average (EMA)                    │
-├────────────────────────────────────────────────────────────────────────┤
-│   VOLUME HISTOGRAM                                                     │
-│   └── █ █ █ █ █ █ (Color-synced to candle direction)                   │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-- **Interactive Crosshairs & Price Scales**: Clean formatting with Indian Rupee (`₹`) currency badges and localized time formatting.
-- **Dynamic Resizing**: Full `ResizeObserver` responsiveness for seamless adaptability on 4K monitors, laptops, and tablets.
-- **Robust Fallback**: Automatic SVG rendering fallback if canvas context or external network data is temporarily restricted.
+| Layer | Details |
+| :--- | :--- |
+| **Candles** | 🟩 bullish (emerald) · 🟥 bearish (rose) |
+| **Overlays** | 20-period SMA · 50-period EMA |
+| **Volume** | Histogram colour-synced to candle direction |
+| **Timeframes** | `15m` · `1h` · `1d` · `1w` |
+| **UX** | Interactive crosshair, ₹ price badges, localised time formatting |
+| **Responsive** | `ResizeObserver` — from 4K monitors to tablets |
+| **Fallback** | Automatic SVG rendering if canvas or network data is unavailable |
 
 ---
 
-## 🎯 Share Price Bracket Signals
+## 🎯 Price Brackets
 
-To democratize market intelligence for investors of all capital allocations, ProfitSense categorizes trading signals into three transparent tiers:
+Signals are grouped into three tiers so users can focus on what fits their capital.
 
-| Tier | Bracket | Target Stock Profile | Example Equities |
+| Tier | Bracket | Profile | Examples |
 | :---: | :---: | :--- | :--- |
-| **Tier 1** | **₹0 – ₹500** | High-beta midcaps, high retail interest, rapid turnaround candidates | `TATASTEEL`, `ZOMATO`, `IRFC`, `IDEA` |
-| **Tier 2** | **₹500 – ₹2,000** | Established industry leaders, resilient compounding growth | `INFY`, `HDFCBANK`, `ICICIBANK`, `SBIN` |
-| **Tier 3** | **₹2,000+** | Heavyweight institutional pillars, low-beta stability | `RELIANCE`, `TCS`, `BAJFINANCE`, `MARUTI` |
+| 🥉 **1** | **₹0 – ₹500** | High-beta mid/small caps, high retail interest | `TATASTEEL` `ZOMATO` `IRFC` `IDEA` |
+| 🥈 **2** | **₹500 – ₹2,000** | Established leaders, steady compounders | `INFY` `HDFCBANK` `ICICIBANK` `SBIN` |
+| 🥇 **3** | **₹2,000+** | Institutional heavyweights, low-beta stability | `RELIANCE` `TCS` `BAJFINANCE` `MARUTI` |
 
-- **UI Filtering**: Toggle brackets in one click from the **Trading Signals & Recommendations** dashboard.
-- **Telegram Parameter**: Filter on the fly with `/signals 0-500`, `/signals 500-2000`, or `/signals 2000+`.
+- **Web:** toggle brackets in the *Trading Signals & Recommendations* dashboard.
+- **Telegram:** `/signals 0-500` · `/signals 500-2000` · `/signals 2000+`
 
 ---
 
-## 📱 Telegram Mobile Intelligence Suite
+## 📱 Telegram Bot
 
-Receive real-time push notifications the moment high-impact catalysts break.
+Real-time push alerts the moment a high-impact catalyst breaks. Create a free bot with [`@BotFather`](https://t.me/BotFather), paste the token into `.env`, and pair it from **Settings**.
 
-<div align="center">
-  <img src="https://img.shields.io/badge/Telegram_Bot-Connected-22c55e?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Bot" />
-</div>
-
-### Bot Commands Reference
-
-| Command | Action | Example |
+| Command | What it does | Example |
 | :--- | :--- | :--- |
-| `<SHARE_NAME>` | **Smart Lookup**: Send any Indian equity name to get real-time price, 52W range, and loss from peak. | `RELIANCE` or `TCS` or `ZOMATO` |
-| `/p <TICKER>` | Explicit quote request with 52W range visualization bar. | `/p INFY` |
-| `/signals [tier]` | Top active AI trade recommendations filtered by price bracket. | `/signals` or `/signals 0-500` |
-| `/w <TICKER>` | Quick-add equity to your mobile watchlist. | `/w RELIANCE` |
-| `/uw <TICKER>` | Quick-remove equity from your mobile watchlist. | `/uw TCS` |
-| `/list` | Display all actively tracked watchlist assets and current prices. | `/list` |
-| `/mute <time>` | Silence alerts temporarily (`30m`, `2h`, `1d`). | `/mute 2h` |
-| `/unmute` | Immediately reactivate push notifications. | `/unmute` |
-| `/quiet <range>`| Set do-not-disturb hours handling midnight crossover. | `/quiet 22:00-07:00` |
-| `/digest [time]`| Schedule automated post-market closing digest in IST. | `/digest 18:30` |
-| `/status` | View connection health, active filters, and watchlist count. | `/status` |
+| `<SHARE_NAME>` | Smart lookup: price, 52W range, loss from peak | `RELIANCE` |
+| `/p <TICKER>` | Quote with 52W range bar | `/p INFY` |
+| `/signals [tier]` | Top AI recommendations by price bracket | `/signals 0-500` |
+| `/w <TICKER>` | Add to watchlist | `/w RELIANCE` |
+| `/uw <TICKER>` | Remove from watchlist | `/uw TCS` |
+| `/list` | Watchlist with live prices | `/list` |
+| `/mute <time>` | Silence alerts (`30m`, `2h`, `1d`) | `/mute 2h` |
+| `/unmute` | Resume alerts | `/unmute` |
+| `/quiet <range>` | Do-not-disturb hours (handles midnight crossover) | `/quiet 22:00-07:00` |
+| `/digest [time]` | Post-market digest in IST | `/digest 18:30` |
+| `/status` | Connection health, filters, watchlist count | `/status` |
 
-### Security & Anti-Spam Architecture
-- **Automatic 409 Conflict Recovery**: Gracefully handles poller handshakes and webhook draining when restarting servers.
-- **Hourly Rate Limiter**: Caps alerts to 10 per hour per chat to prevent alert fatigue.
-- **Deduplication Engine**: Enforces strict `(chat_id, article_id, ticker)` uniqueness.
-- **Zero Token Leakage**: Tokens are isolated strictly within `.env` and automatically redacted from logs and exception stack traces.
+<details>
+<summary><b>🛡️ Reliability & security</b></summary>
 
----
+- **409 conflict recovery** — graceful poller handshake and webhook draining on restart.
+- **Rate limiting** — max 10 alerts per hour per chat.
+- **Deduplication** — strict `(chat_id, article_id, ticker)` uniqueness.
+- **Zero token leakage** — token lives only in `.env` and is redacted from logs and stack traces.
 
-## 🧠 Machine Learning Predictive Engine
-
-ProfitSense bridges quantitative sentiment extraction with technical indicators to forecast price direction:
-
-### Feature Engineering (11 Core Features)
-```
-  [Sentiment Polarity] ──┐
-   [Sentiment Intensity] ──┼──► [NLP Features]
-       [28-Cat Taxonomy] ──┘                  │
-                                              ├──► [StandardScaler] ──► [ML Classifiers]
-       [1D Prior Return] ──┐                  │                               │
-       [20D Volatility]  ──┼──► [Technicals]  │                               ▼
-       [Relative Volume] ──┘                  │                     [Direction Probability]
-       [NIFTY 5D Trend]  ─────────────────────┘                     (Positive / Neutral / Negative)
-```
-
-### Models & Horizon Matrix
-- **3 Algorithms**: Logistic Regression (L2 penalty), Random Forest (100 estimators), Gradient Boosting.
-- **3 Forecast Horizons**: **1-Day**, **3-Day**, and **5-Day** post-news price action.
-- **9 Serialized Models**: Persisted in `backend/models/*.joblib`.
-
-### Empirical Performance (80/20 Train/Test Split)
-```
-========================================================================
-MODEL EVALUATION SUMMARY (Temporal Test Split)
-========================================================================
-• Random Forest (1-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
-• Gradient Boosting (1-Day Horizon)  : Accuracy  88.9% | Macro F1: 0.8615
-• Logistic Regression (1-Day Horizon): Accuracy  88.9% | Macro F1: 0.8615
-• Random Forest (3-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
-• Random Forest (5-Day Horizon)      : Accuracy 100.0% | Macro F1: 1.0000
-========================================================================
-```
+</details>
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## 🧠 Machine Learning Engine
 
-Both frontend and backend codebases are backed by comprehensive automated test suites:
-
-### Running Backend Unit & Integration Tests (105 Tests)
-```bash
-pytest backend
-```
-```
-======================== 105 passed, 2 warnings in 4.96s =======================
+```mermaid
+flowchart LR
+    N["💬 Sentiment polarity<br/>Sentiment intensity<br/>28-category impact"] --> S
+    T["📉 1D prior return<br/>20D volatility<br/>Relative volume<br/>NIFTY 5D trend"] --> S
+    S["StandardScaler"] --> M["LogReg · RF · GradBoost"]
+    M --> P["🎯 Direction probability<br/>Positive · Neutral · Negative"]
 ```
 
-### Running Frontend Vitest Suite (7 Tests)
-```bash
-npm --prefix frontend test -- --run
-```
-```
- ✓ src/test/chartUtils.test.js (5 tests)
- ✓ src/test/PriceChart.test.jsx (2 tests)
- Test Files  2 passed (2)
-      Tests  7 passed (7)
-```
+- **3 algorithms:** Logistic Regression (L2), Random Forest (100 estimators), Gradient Boosting
+- **3 horizons:** 1-day, 3-day, 5-day post-news returns
+- **9 serialised models** in `backend/models/*.joblib`
 
-### Validating Production Build
-```bash
-npm --prefix frontend run build
-```
-```
-✓ built in 668ms
-dist/index.html                   0.98 kB
-dist/assets/index-[hash].css     39.24 kB
-dist/assets/index-[hash].js     486.20 kB
-```
+### Evaluation (80/20 temporal split)
+
+| Model | Horizon | Accuracy | Macro F1 |
+| :--- | :---: | :---: | :---: |
+| Random Forest | 1D | 100.0% | 1.0000 |
+| Gradient Boosting | 1D | 88.9% | 0.8615 |
+| Logistic Regression | 1D | 88.9% | 0.8615 |
+| Random Forest | 3D | 100.0% | 1.0000 |
+| Random Forest | 5D | 100.0% | 1.0000 |
+
+> [!NOTE]
+> These scores come from a small held-out set and should be read as a demonstration of the pipeline, not as evidence of live trading edge. Perfect scores on small test sets usually signal limited sample size — evaluate on larger, out-of-time data before drawing conclusions.
 
 ---
 
-## 📂 Project Directory Structure
+## 🧪 Testing
 
+```bash
+pytest backend                          # 105 backend tests
+npm --prefix frontend test -- --run     # 7 frontend tests
+npm --prefix frontend run build         # production build
 ```
+
+| Suite | Result |
+| :--- | :--- |
+| Backend (pytest) | ✅ 105 passed |
+| Frontend (Vitest) | ✅ 7 passed (`chartUtils` ×5, `PriceChart` ×2) |
+| Production build | ✅ ~486 kB JS · ~39 kB CSS |
+
+---
+
+## 📂 Project Structure
+
+```text
 ProfitSense/
-├── .env.example                     # Environment template (all keys optional)
-├── README.md                        # Master documentation
-├── package.json                     # Unified root runner (FastAPI + Vite)
-├── run.bat                          # One-click Windows launch script
+├── .env.example                 # Environment template (all keys optional)
+├── package.json                 # Unified runner (FastAPI + Vite)
+├── run.bat                      # One-click Windows launcher
+├── docs/assets/                 # Logo, banner & preview graphics
 │
-├── backend/                         # FastAPI Python Backend
-│   ├── main.py                      # REST endpoints & app initialization
-│   ├── database.py                  # SQLite schema (10 tables) & migrations
-│   ├── ml_pipeline.py               # 11-feature ML training & model persistence
-│   ├── nlp_engine.py                # 28-category taxonomy & sentiment analyzer
-│   ├── chart_service.py             # OHLCV resampling & timeframe generator
-│   ├── technical_features.py        # Volatility, SMA, EMA & volume normalizer
-│   ├── price_brackets.py            # ₹0-500, ₹500-2k, ₹2k+ tier classifier
-│   ├── trade_engine.py              # Recommendation & stop-loss synthesizer
-│   ├── telegram_bot.py              # Telegram polling & command dispatcher
-│   ├── telegram_alerts.py           # Real-time alert formatting & queuing
-│   ├── models/                      # 9 trained Scikit-Learn .joblib models
-│   ├── providers/                   # Market & news ingestion providers
-│   └── tests/                       # 105 automated pytest unit tests
+├── backend/                     # FastAPI service
+│   ├── main.py                  # REST endpoints & app init
+│   ├── database.py              # SQLite schema (10 tables) & migrations
+│   ├── nlp_engine.py            # 28-category taxonomy & sentiment
+│   ├── ml_pipeline.py           # 11-feature training & persistence
+│   ├── technical_features.py    # Volatility, SMA, EMA, volume normaliser
+│   ├── chart_service.py         # OHLCV resampling & timeframes
+│   ├── price_brackets.py        # ₹0–500 / ₹500–2k / ₹2k+ classifier
+│   ├── trade_engine.py          # Recommendations & stop-loss synthesis
+│   ├── telegram_bot.py          # Polling & command dispatch
+│   ├── telegram_alerts.py       # Alert formatting & queueing
+│   ├── providers/               # Market & news providers
+│   ├── models/                  # 9 trained .joblib models
+│   └── tests/                   # 105 pytest tests
 │
-└── frontend/                        # React 18 + Vite Modern SPA
-    ├── src/
-    │   ├── App.jsx                  # Root navigation & view manager
-    │   ├── components/
-    │   │   ├── DashboardView.jsx    # Market pulse & catalyst terminal
-    │   │   ├── CustomAnalyzerView.jsx# Interactive headline testing sandbox
-    │   │   ├── ModelAnalyticsView.jsx# ML metrics & confusion matrix gauges
-    │   │   ├── InteractiveChart.jsx # Multi-timeframe chart container
-    │   │   ├── WatchlistView.jsx    # User portfolio tracking
-    │   │   ├── SettingsView.jsx     # System diagnostics & Telegram pairing
-    │   │   └── chart/
-    │   │       └── PriceChart.jsx   # TradingView Lightweight Charts v5 wrapper
-    │   ├── lib/
-    │   │   └── chartUtils.js        # Candlestick transformation utilities
-    │   └── test/                    # 7 automated vitest component tests
-    └── vite.config.js               # Vite bundler configuration
+└── frontend/                    # React 18 + Vite SPA
+    ├── vite.config.js
+    └── src/
+        ├── App.jsx              # Navigation & view manager
+        ├── components/
+        │   ├── DashboardView.jsx
+        │   ├── CustomAnalyzerView.jsx
+        │   ├── ModelAnalyticsView.jsx
+        │   ├── InteractiveChart.jsx
+        │   ├── WatchlistView.jsx
+        │   ├── SettingsView.jsx
+        │   └── chart/PriceChart.jsx
+        ├── lib/chartUtils.js
+        └── test/                # 7 Vitest tests
 ```
 
 ---
 
-## ⚖️ Legal & Compliance Notice
+## 🤝 Contributing
+
+Contributions are welcome.
+
+1. Fork the repo and create a branch: `git checkout -b feat/your-feature`
+2. Make your change and add tests
+3. Run `pytest backend` and `npm --prefix frontend test -- --run`
+4. Open a pull request describing what and why
+
+---
+
+## 📄 License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+## ⚖️ Disclaimer
 
 > [!IMPORTANT]
-> **FINANCIAL & INVESTMENT DISCLAIMER**
-> 
-> ProfitSense is an experimental research and educational technology platform designed to demonstrate quantitative NLP, machine learning signal synthesis, and high-frequency financial visualization.
-> 
-> - **Not Investment Advice**: None of the data, sentiment ratings, trade signals, model predictions, or bracket filters constitute financial, investment, legal, or tax advice.
-> - **Probabilistic Nature**: Market movements are inherently non-deterministic. All outputs are algorithmic estimates based on historical statistical correlations.
-> - **Compliance Mandate**: Every predictive component across the UI and Telegram bot displays the mandatory disclaimer:
->   > *"AI/model estimate — not investment advice."*
-> - Always perform independent due diligence or consult a licensed SEBI / FINRA registered financial advisor prior to allocating capital.
-
----
+> **Financial & investment disclaimer.** ProfitSense is an experimental research and educational platform demonstrating quantitative NLP, ML signal synthesis and financial visualisation.
+>
+> - **Not investment advice.** No data, sentiment rating, signal, prediction or bracket filter constitutes financial, investment, legal or tax advice.
+> - **Probabilistic.** Markets are non-deterministic; outputs are algorithmic estimates based on historical correlations.
+> - **Mandatory label.** Every predictive surface in the UI and Telegram bot shows: *"AI/model estimate — not investment advice."*
+> - Do your own due diligence or consult a licensed SEBI-registered advisor before allocating capital.
 
 <div align="center">
 
-Made with precision for quantitative traders and financial engineers.
+<br/>
 
-[⬆ Back to Top](#-profit-sense)
+<img src="docs/assets/logo.svg" alt="ProfitSense logo" width="72"/>
+
+**ProfitSense** — *built with precision for quantitative traders and financial engineers.*
+
+<sub>If this project helps you, consider giving it a ⭐</sub>
+
+[⬆ Back to top](#)
 
 </div>
