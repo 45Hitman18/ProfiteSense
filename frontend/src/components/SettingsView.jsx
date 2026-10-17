@@ -4,7 +4,8 @@ import {
   AlertTriangle, RefreshCw, Key, Server, Lock, ExternalLink,
   Cpu, HardDrive, BellRing, SlidersHorizontal, Download, Sparkles,
   Radio, Check, Activity, FileText, Layers, ShieldCheck, Zap,
-  Volume2, VolumeX, Terminal, ArrowRight, BarChart3, HelpCircle
+  Volume2, VolumeX, Terminal, ArrowRight, BarChart3, HelpCircle,
+  Send, QrCode, Copy, Trash2, Smartphone, CheckCheck
 } from 'lucide-react';
 
 const MANDATORY_DISCLAIMER = "Market News AI provides automated analysis and model-based estimates for informational and educational purposes only. It is not financial, investment, or trading advice. Market outcomes are uncertain and users should conduct their own research.";
@@ -12,11 +13,23 @@ const MANDATORY_DISCLAIMER = "Market News AI provides automated analysis and mod
 export default function SettingsView() {
   const [settingsData, setSettingsData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('preferences'); // 'preferences' | 'providers' | 'database' | 'ml' | 'compliance'
+  const [activeTab, setActiveTab] = useState('preferences'); // 'preferences' | 'telegram' | 'providers' | 'database' | 'ml' | 'compliance'
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [optimizingDb, setOptimizingDb] = useState(false);
   const [optimizeMsg, setOptimizeMsg] = useState('');
+
+  // Telegram alerts state
+  const [telegramStatus, setTelegramStatus] = useState(null);
+  const [loadingTelegram, setLoadingTelegram] = useState(false);
+  const [telegramLink, setTelegramLink] = useState(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [telegramMsg, setTelegramMsg] = useState('');
+  const [telegramError, setTelegramError] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [editingChatSettings, setEditingChatSettings] = useState({});
+
 
   // Local preferences stored in localStorage
   const [horizon, setHorizon] = useState(() => localStorage.getItem('ps_default_horizon') || '1d');
@@ -43,9 +56,164 @@ export default function SettingsView() {
     }
   };
 
+  const parseChatPriceBracket = (raw) => {
+    if (!raw) return 'ALL';
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 1) return parsed[0];
+        if (parsed.length >= 3) return 'ALL';
+        return parsed[0] || 'ALL';
+      }
+      return String(parsed);
+    } catch (e) {
+      return 'ALL';
+    }
+  };
+
+  const fetchTelegramStatus = async () => {
+    setLoadingTelegram(true);
+    try {
+      const res = await fetch('/api/telegram/status');
+      if (res.ok) {
+        const data = await res.json();
+        setTelegramStatus(data);
+        // Initialize editing state for chats
+        const initialEdits = {};
+        (data.chats || []).forEach(c => {
+          initialEdits[c.chat_id] = {
+            min_impact: c.min_impact || 'HIGH',
+            min_confidence: Math.round((c.min_confidence || 0.6) * 100),
+            price_brackets: parseChatPriceBracket(c.price_brackets),
+            watchlist_only: c.watchlist_only === 1,
+            digest_enabled: c.digest_enabled === 1,
+            digest_time: c.digest_time || '18:30',
+            quiet_start: c.quiet_start || '',
+            quiet_end: c.quiet_end || ''
+          };
+        });
+        setEditingChatSettings(initialEdits);
+      }
+    } catch (e) {
+      console.error("Failed to fetch telegram status:", e);
+    } finally {
+      setLoadingTelegram(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    fetchTelegramStatus();
   }, []);
+
+  const handleGenerateLinkCode = async () => {
+    setGeneratingLink(true);
+    setTelegramError('');
+    try {
+      const res = await fetch('/api/telegram/link-code', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setTelegramLink(data);
+        setTelegramMsg('Single-use link code generated. Valid for 10 minutes.');
+      } else {
+        const err = await res.json();
+        setTelegramError(err.detail || 'Failed to generate link code');
+      }
+    } catch (e) {
+      setTelegramError('Network error generating link: ' + e.message);
+    } finally {
+      setGeneratingLink(false);
+      setTimeout(() => setTelegramMsg(''), 6000);
+    }
+  };
+
+  const handleSendTelegramTest = async (chatId = null) => {
+    setTestSending(true);
+    setTelegramMsg('');
+    setTelegramError('');
+    try {
+      const res = await fetch('/api/telegram/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTelegramMsg(data.message || 'Test alert delivered successfully!');
+      } else {
+        setTelegramError(data.detail || data.message || 'Failed to deliver test alert.');
+      }
+    } catch (e) {
+      setTelegramError('Error sending test alert: ' + e.message);
+    } finally {
+      setTestSending(false);
+      setTimeout(() => setTelegramMsg(''), 6000);
+      setTimeout(() => setTelegramError(''), 8000);
+    }
+  };
+
+  const handleUpdateChatSettings = async (chatId) => {
+    const edit = editingChatSettings[chatId];
+    if (!edit) return;
+    try {
+      const payload = {
+        chat_id: chatId,
+        min_impact: edit.min_impact,
+        min_confidence: parseFloat(edit.min_confidence) / 100.0,
+        price_brackets: edit.price_brackets || 'ALL',
+        watchlist_only: edit.watchlist_only ? 1 : 0,
+        digest_enabled: edit.digest_enabled ? 1 : 0,
+        digest_time: edit.digest_time,
+        quiet_start: edit.quiet_start || null,
+        quiet_end: edit.quiet_end || null
+      };
+      const res = await fetch('/api/telegram/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setTelegramMsg(`Updated alert settings for chat ${chatId}`);
+        fetchTelegramStatus();
+      } else {
+        const err = await res.json();
+        setTelegramError(err.detail || 'Failed to update chat settings');
+      }
+    } catch (e) {
+      setTelegramError('Network error updating chat: ' + e.message);
+    } finally {
+      setTimeout(() => setTelegramMsg(''), 5000);
+    }
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    if (!window.confirm(`Disconnect Telegram chat ${chatId}? You will no longer receive alerts in this chat.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/telegram/chat/${chatId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setTelegramMsg(`Chat ${chatId} disconnected.`);
+        fetchTelegramStatus();
+      } else {
+        const err = await res.json();
+        setTelegramError(err.detail || 'Failed to disconnect chat');
+      }
+    } catch (e) {
+      setTelegramError('Network error disconnecting chat: ' + e.message);
+    } finally {
+      setTimeout(() => setTelegramMsg(''), 5000);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (telegramLink?.deep_link) {
+      navigator.clipboard.writeText(telegramLink.deep_link);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
+  };
+
 
   const handleHorizonChange = (val) => {
     setHorizon(val);
@@ -373,6 +541,7 @@ export default function SettingsView() {
       }}>
         {[
           { id: 'preferences', label: 'Preferences & Controls', icon: SlidersHorizontal },
+          { id: 'telegram', label: 'Telegram Alerts', icon: Send },
           { id: 'providers', label: 'Data Feeds & Providers', icon: Radio },
           { id: 'database', label: 'Database & Storage Engine', icon: Database },
           { id: 'ml', label: 'ML Pipeline & Architecture', icon: Cpu },
@@ -638,6 +807,663 @@ export default function SettingsView() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: TELEGRAM ALERTS */}
+      {activeTab === 'telegram' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          {/* Notification feedback banners */}
+          {telegramMsg && (
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: '8px',
+              background: 'var(--bullish-bg)',
+              border: '1px solid var(--bullish-border)',
+              color: 'var(--bullish)',
+              fontSize: '0.82rem',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <CheckCircle2 size={18} />
+              {telegramMsg}
+            </div>
+          )}
+
+          {telegramError && (
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: '8px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
+              fontSize: '0.82rem',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <AlertTriangle size={18} />
+              {telegramError}
+            </div>
+          )}
+
+          {/* 1. MASTER STATUS & HEADER CARD */}
+          <div className="glass-card" style={{ padding: '22px 24px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #229ED9 0%, #0088cc 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(34, 158, 217, 0.3)',
+                  color: '#fff'
+                }}>
+                  <Send size={22} style={{ transform: 'translateX(-1px) translateY(1px)' }} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
+                      Telegram Alert Pipeline
+                    </h2>
+                    {telegramStatus?.enabled && telegramStatus?.configured ? (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        background: 'rgba(0, 109, 66, 0.12)',
+                        color: 'var(--bullish)',
+                        border: '1px solid var(--bullish-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block' }} />
+                        BOT ONLINE {telegramStatus?.bot_username ? `(@${telegramStatus.bot_username})` : ''}
+                      </span>
+                    ) : !telegramStatus?.configured ? (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        background: 'rgba(217, 119, 6, 0.1)',
+                        color: '#d97706',
+                        border: '1px solid rgba(217, 119, 6, 0.3)'
+                      }}>
+                        BOT TOKEN REQUIRED
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        background: 'rgba(107, 114, 128, 0.1)',
+                        color: 'var(--text-muted)',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        TELEGRAM DISABLED
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                    Free Telegram Bot API (@BotFather) • Instant high-impact catalysts • Watchlist monitors • Daily market digests
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  onClick={fetchTelegramStatus}
+                  disabled={loadingTelegram}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RefreshCw size={14} className={loadingTelegram ? 'spin' : ''} />
+                  Refresh
+                </button>
+
+                <button
+                  onClick={() => handleSendTelegramTest()}
+                  disabled={testSending || !telegramStatus?.configured}
+                  className="btn btn-primary btn-sm"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #0F52BA 0%, #229ED9 100%)',
+                    border: 'none',
+                    color: '#fff'
+                  }}
+                  title={!telegramStatus?.configured ? "Configure bot token first" : "Send test message to all active chats"}
+                >
+                  <Send size={14} />
+                  {testSending ? 'Sending Test...' : 'Send Test Alert'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. CONNECT NEW CHAT (DEEP LINK & QR CODE) */}
+          <div className="glass-card" style={{ padding: '24px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(34, 158, 217, 0.1)', color: '#0088cc' }}>
+                <Smartphone size={20} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
+                  Pair Your Device / Connect Telegram
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Generate a single-use 10-minute security code to connect your chat
+                </p>
+              </div>
+            </div>
+
+            {!telegramLink ? (
+              <div style={{
+                background: 'var(--bg-secondary)',
+                padding: '20px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px'
+              }}>
+                <div style={{ maxWidth: '520px' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    Ready to connect your Telegram account?
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                    Click below to generate an authorized deep link and QR code. Open it in Telegram and tap <b>START</b> to automatically sync your settings and receive live news signals.
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGenerateLinkCode}
+                  disabled={generatingLink}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 18px',
+                    fontWeight: '700'
+                  }}
+                >
+                  <QrCode size={16} />
+                  {generatingLink ? 'Generating Secure Link...' : 'Generate Connect Link & QR'}
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                background: 'var(--bg-secondary)',
+                padding: '20px',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 109, 66, 0.3)'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', alignItems: 'center' }}>
+                  {/* Left Column: Deep link and buttons */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        background: 'rgba(0, 109, 66, 0.1)',
+                        color: 'var(--bullish)',
+                        fontWeight: '700',
+                        fontSize: '0.75rem'
+                      }}>
+                        Single-Use Code: {telegramLink.code}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Expires in 10 minutes
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-all',
+                      color: 'var(--text-primary)',
+                      marginBottom: '12px'
+                    }}>
+                      {telegramLink.deep_link}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                      <button
+                        onClick={handleCopyLink}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {copiedLink ? <CheckCheck size={14} color="var(--bullish)" /> : <Copy size={14} />}
+                        {copiedLink ? 'Copied to Clipboard!' : 'Copy Link'}
+                      </button>
+
+                      <a
+                        href={telegramLink.deep_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-primary btn-sm"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={14} />
+                        Open in Telegram
+                      </a>
+
+                      <button
+                        onClick={handleGenerateLinkCode}
+                        disabled={generatingLink}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <RefreshCw size={13} className={generatingLink ? 'spin' : ''} />
+                        New Code
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      <b>Instructions:</b><br />
+                      1. Scan the QR code or tap <b>Open in Telegram</b>.<br />
+                      2. In Telegram, press <b>START</b> to link your chat.<br />
+                      3. You'll receive instant confirmation and instructions.
+                    </div>
+                  </div>
+
+                  {/* Right Column: QR Code Display */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{
+                      padding: '12px',
+                      background: '#ffffff',
+                      borderRadius: '10px',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                      display: 'inline-block'
+                    }}>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(telegramLink.deep_link)}`}
+                        alt="Telegram Connect QR Code"
+                        style={{ width: '160px', height: '160px', display: 'block' }}
+                      />
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px', fontWeight: '600' }}>
+                      Scan with phone camera
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. CONNECTED CHATS MANAGEMENT */}
+          <div className="glass-card" style={{ padding: '24px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
+                  Connected Chats & Preferences ({telegramStatus?.active_chats_count || 0})
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                  Manage impact filtering, quiet hours, and daily market digests per chat
+                </p>
+              </div>
+            </div>
+
+            {!telegramStatus?.chats || telegramStatus.chats.length === 0 ? (
+              <div style={{
+                padding: '30px',
+                textAlign: 'center',
+                background: 'var(--bg-secondary)',
+                borderRadius: '8px',
+                color: 'var(--text-muted)',
+                fontSize: '0.85rem'
+              }}>
+                <Send size={32} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
+                <div>No connected Telegram chats yet.</div>
+                <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                  Click <b>Generate Connect Link & QR</b> above to link your first Telegram chat.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {telegramStatus.chats.map((chat) => {
+                  const edit = editingChatSettings[chat.chat_id] || {
+                    min_impact: chat.min_impact,
+                    min_confidence: Math.round((chat.min_confidence || 0.6) * 100),
+                    price_brackets: parseChatPriceBracket(chat.price_brackets),
+                    watchlist_only: chat.watchlist_only === 1,
+                    digest_enabled: chat.digest_enabled === 1,
+                    digest_time: chat.digest_time || '18:30',
+                    quiet_start: chat.quiet_start || '',
+                    quiet_end: chat.quiet_end || ''
+                  };
+
+                  return (
+                    <div
+                      key={chat.chat_id}
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '18px 20px'
+                      }}
+                    >
+                      {/* Chat Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: chat.is_active ? 'var(--bullish)' : 'var(--text-muted)'
+                          }} />
+                          <div>
+                            <strong style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                              {chat.username ? `@${chat.username}` : `Chat ID: ${chat.chat_id}`}
+                            </strong>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                              (ID: {chat.chat_id})
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleSendTelegramTest(chat.chat_id)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '0.72rem', padding: '4px 10px' }}
+                          >
+                            Send Test
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteChat(chat.chat_id)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '0.72rem', padding: '4px 10px', color: '#ef4444' }}
+                            title="Disconnect this chat"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Controls Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+                        {/* Minimum Impact */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            MINIMUM IMPACT
+                          </label>
+                          <select
+                            value={edit.min_impact}
+                            onChange={(e) => {
+                              setEditingChatSettings(prev => ({
+                                ...prev,
+                                [chat.chat_id]: { ...edit, min_impact: e.target.value }
+                              }));
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-card)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.78rem'
+                            }}
+                          >
+                            <option value="HIGH">HIGH (Catalysts only)</option>
+                            <option value="MEDIUM">MEDIUM (Moderate + High)</option>
+                            <option value="ALL">ALL (All market signals)</option>
+                          </select>
+                        </div>
+
+                        {/* Minimum Confidence */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            MIN CONFIDENCE: {edit.min_confidence}%
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="90"
+                            step="5"
+                            value={edit.min_confidence}
+                            onChange={(e) => {
+                              setEditingChatSettings(prev => ({
+                                ...prev,
+                                [chat.chat_id]: { ...edit, min_confidence: parseInt(e.target.value) }
+                              }));
+                            }}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        {/* Share Price Bracket Filter */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            PRICE FILTER
+                          </label>
+                          <select
+                            value={edit.price_brackets || 'ALL'}
+                            onChange={(e) => {
+                              setEditingChatSettings(prev => ({
+                                ...prev,
+                                [chat.chat_id]: { ...edit, price_brackets: e.target.value }
+                              }));
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-card)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.78rem'
+                            }}
+                          >
+                            <option value="ALL">All Share Prices (Any ₹)</option>
+                            <option value="0-500">₹0 – ₹500 (Small/Mid)</option>
+                            <option value="500-1000">₹500 – ₹1,000</option>
+                            <option value="1000+">₹1,000+ (High value)</option>
+                          </select>
+                        </div>
+
+                        {/* Quiet Hours */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            QUIET HOURS (IST)
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <input
+                              type="text"
+                              placeholder="22:00"
+                              value={edit.quiet_start}
+                              onChange={(e) => {
+                                setEditingChatSettings(prev => ({
+                                  ...prev,
+                                  [chat.chat_id]: { ...edit, quiet_start: e.target.value }
+                                }));
+                              }}
+                              style={{
+                                width: '70px',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.75rem'
+                              }}
+                            />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>to</span>
+                            <input
+                              type="text"
+                              placeholder="07:00"
+                              value={edit.quiet_end}
+                              onChange={(e) => {
+                                setEditingChatSettings(prev => ({
+                                  ...prev,
+                                  [chat.chat_id]: { ...edit, quiet_end: e.target.value }
+                                }));
+                              }}
+                              style={{
+                                width: '70px',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.75rem'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Evening Daily Digest */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            DAILY DIGEST (IST)
+                          </label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={edit.digest_enabled}
+                              onChange={(e) => {
+                                setEditingChatSettings(prev => ({
+                                  ...prev,
+                                  [chat.chat_id]: { ...edit, digest_enabled: e.target.checked }
+                                }));
+                              }}
+                            />
+                            <input
+                              type="text"
+                              value={edit.digest_time}
+                              disabled={!edit.digest_enabled}
+                              onChange={(e) => {
+                                setEditingChatSettings(prev => ({
+                                  ...prev,
+                                  [chat.chat_id]: { ...edit, digest_time: e.target.value }
+                                }));
+                              }}
+                              style={{
+                                width: '70px',
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.75rem'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Options & Save Button */}
+                      <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={edit.watchlist_only}
+                            onChange={(e) => {
+                              setEditingChatSettings(prev => ({
+                                ...prev,
+                                [chat.chat_id]: { ...edit, watchlist_only: e.target.checked }
+                              }));
+                            }}
+                          />
+                          Watchlist Only (Only alert for stocks tracked in Watchlist)
+                        </label>
+
+                        <button
+                          onClick={() => handleUpdateChatSettings(chat.chat_id)}
+                          className="btn btn-primary btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '6px 14px' }}
+                        >
+                          Save Chat Preferences
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 4. INTERACTIVE BOT COMMANDS REFERENCE */}
+          <div className="glass-card" style={{ padding: '24px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: '800', margin: '0 0 12px 0', color: 'var(--text-primary)' }}>
+              Interactive Telegram Bot Commands
+            </h3>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+              Control alerts or get instant stock analytics directly inside Telegram:
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+              {[
+                { cmd: "<SHARE_NAME>", desc: "Easiest! Just send any share name (e.g. RELIANCE, TCS) to get 52W High, Loss & Price" },
+                { cmd: "/p <TICKER>", desc: "Get Current Price, 52W High, Loss from Peak & Range (e.g. /p INFY)" },
+                { cmd: "/signals", desc: "Top live AI trade recommendations & price target levels" },
+                { cmd: "/w <TICKER>", desc: "Quick-add stock to watchlist (e.g. /w TATAMOTORS)" },
+                { cmd: "/uw <TICKER>", desc: "Quick-remove stock from watchlist" },
+                { cmd: "/status", desc: "View current alert preferences & active watchlist count" },
+                { cmd: "/list", desc: "View all actively tracked Indian stocks" },
+                { cmd: "/mute <dur>", desc: "Temporarily mute alerts (e.g. /mute 2h, /mute 30m, /mute 1d)" },
+                { cmd: "/unmute", desc: "Resume alerts immediately" },
+                { cmd: "/minconf <0-100>", desc: "Set minimum confidence filter (e.g. /minconf 70)" },
+                { cmd: "/impact <level>", desc: "Filter by impact (e.g. /impact high or /impact medium)" },
+                { cmd: "/digest <time|off>", desc: "Set evening digest time or toggle (e.g. /digest 18:30)" },
+                { cmd: "/quiet <window|off>", desc: "Set quiet hours (e.g. /quiet 22:00-07:00)" },
+                { cmd: "/stop", desc: "Deactivate alerts and disconnect chat" },
+              ].map((c) => (
+                <div
+                  key={c.cmd}
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem'
+                  }}
+                >
+                  <code style={{ fontWeight: '700', color: 'var(--accent-blue)', display: 'block', marginBottom: '2px' }}>
+                    {c.cmd}
+                  </code>
+                  <span style={{ color: 'var(--text-muted)' }}>{c.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. MANDATORY COMPLIANCE DISCLAIMER */}
+          <div style={{
+            padding: '12px 16px',
+            borderRadius: '6px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            fontSize: '0.72rem',
+            color: 'var(--text-muted)',
+            fontStyle: 'italic',
+            textAlign: 'center'
+          }}>
+            {MANDATORY_DISCLAIMER}
           </div>
         </div>
       )}

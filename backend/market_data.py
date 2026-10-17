@@ -1,4 +1,5 @@
 import json
+import math
 import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -45,24 +46,56 @@ def get_ticker_quote(ticker: str) -> Dict[str, Any]:
     try:
         yf_ticker = yf.Ticker(clean_ticker)
         fast_info = getattr(yf_ticker, "fast_info", None)
+
+        def _clean_f(val, fallback=0.0):
+            if val is None:
+                return fallback
+            try:
+                f = float(val)
+                return fallback if (math.isnan(f) or math.isinf(f)) else f
+            except (ValueError, TypeError):
+                return fallback
+
+        lp = _clean_f(getattr(fast_info, "last_price", None), None) if fast_info else None
+        pc = _clean_f(getattr(fast_info, "previous_close", None), None) if fast_info else None
         
-        # Pull latest history for price and change
         hist = yf_ticker.history(period="5d", interval="1d")
-        if hist.empty:
-            raise ValueError(f"No history found for {clean_ticker}")
+        valid_hist = hist.dropna(subset=["Close"]) if not hist.empty else hist
+        
+        if lp is not None and lp > 0:
+            current_price = lp
+            if pc is not None and pc > 0:
+                prev_close = pc
+            elif not valid_hist.empty:
+                prev_close = _clean_f(valid_hist["Close"].iloc[-1], current_price)
+            else:
+                prev_close = current_price
+        elif not valid_hist.empty:
+            current_price = _clean_f(valid_hist["Close"].iloc[-1], 0.0)
+            prev_close = _clean_f(valid_hist["Close"].iloc[-2], current_price) if len(valid_hist) > 1 else current_price
+        else:
+            raise ValueError(f"No price data found for {clean_ticker}")
             
-        current_price = float(hist["Close"].iloc[-1])
-        prev_close = float(hist["Close"].iloc[-2]) if len(hist) > 1 else current_price
-        change_pct = round(((current_price - prev_close) / prev_close) * 100, 2)
+        change_pct = round(((current_price - prev_close) / prev_close) * 100, 2) if prev_close > 0 else 0.0
         change_amount = round(current_price - prev_close, 2)
         
         # High, Low, Volume
-        high_52w = float(getattr(fast_info, "year_high", current_price * 1.15)) if fast_info else current_price * 1.15
-        low_52w = float(getattr(fast_info, "year_low", current_price * 0.85)) if fast_info else current_price * 0.85
-        market_cap = float(getattr(fast_info, "market_cap", 0)) if fast_info else 0
+        high_52w = _clean_f(getattr(fast_info, "year_high", current_price * 1.15), current_price * 1.15)
+        low_52w = _clean_f(getattr(fast_info, "year_low", current_price * 0.85), current_price * 0.85)
+        market_cap = _clean_f(getattr(fast_info, "market_cap", 0), 0.0)
+        live_volume = int(_clean_f(getattr(fast_info, "last_volume", None), 0))
+        if live_volume <= 0 and not valid_hist.empty and "Volume" in valid_hist:
+            live_volume = int(_clean_f(valid_hist["Volume"].iloc[-1], 0))
         
         # Sparkline 5-day prices
-        sparkline = [round(float(p), 2) for p in hist["Close"].tolist()]
+        sparkline = []
+        if not valid_hist.empty:
+            for p in valid_hist["Close"].tolist():
+                cf = _clean_f(p, None)
+                if cf is not None:
+                    sparkline.append(round(cf, 2))
+        if not sparkline or sparkline[-1] != round(current_price, 2):
+            sparkline.append(round(current_price, 2))
         
         # Info dictionary for name and sector
         info = {}
@@ -81,7 +114,7 @@ def get_ticker_quote(ticker: str) -> Dict[str, Any]:
             "high_52w": round(high_52w, 2),
             "low_52w": round(low_52w, 2),
             "market_cap": market_cap,
-            "volume": int(hist["Volume"].iloc[-1]) if "Volume" in hist else 0,
+            "volume": live_volume,
             "pe_ratio": info.get("trailingPE") or info.get("forwardPE") or None,
             "sector": info.get("sector") or "Equities",
             "sparkline": sparkline,

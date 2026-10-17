@@ -55,6 +55,15 @@ def _put_to_cache(ticker: str, data: Dict[str, Any]) -> None:
     _ENGINE_CACHE[ticker] = {"ts": _now_ts(), "data": data}
 
 
+def clear_trade_cache(ticker: Optional[str] = None) -> None:
+    """Clear trade engine technical indicator cache for one ticker or all tickers."""
+    global _ENGINE_CACHE
+    if ticker:
+        _ENGINE_CACHE.pop(ticker, None)
+    else:
+        _ENGINE_CACHE.clear()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  TECHNICAL INDICATOR CALCULATIONS
 # ─────────────────────────────────────────────────────────────────────────────

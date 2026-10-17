@@ -18,3 +18,15 @@ ENABLE_EXTERNAL_LLM = os.getenv("ENABLE_EXTERNAL_LLM", "false").lower() == "true
 PORT = int(os.getenv("PORT", 8000))
 HOST = os.getenv("HOST", "127.0.0.1")
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+
+# --------------------------------------------------------
+# TELEGRAM ALERTS CONFIGURATION
+# --------------------------------------------------------
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_ENABLED = os.getenv("TELEGRAM_ENABLED", "false").lower() == "true"
+TELEGRAM_POLL_INTERVAL = float(os.getenv("TELEGRAM_POLL_INTERVAL", "2.0"))
+TELEGRAM_ALLOWED_CHAT_IDS = [
+    x.strip() for x in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if x.strip()
+]
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:5173")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")

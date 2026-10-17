@@ -85,8 +85,8 @@ export default function App() {
     <div className="app-container">
       {/* 1. EDITORIAL TOP DATELINE BAR */}
       <div style={{ background: '#F5F1E8', borderBottom: '1px solid #C9C1B5', padding: '6px 24px', fontSize: '11px', color: '#5A403D', fontWeight: '600' }}>
-        <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em' }}>
+        <div className="broadsheet-dateline-grid">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.06em', justifySelf: 'start' }}>
             <span>{todayFormatted}</span>
             <span style={{ color: '#C9C1B5' }}>•</span>
             <span style={{ fontWeight: '700' }}>INDIA EDITION</span>
@@ -94,11 +94,11 @@ export default function App() {
             <span style={{ color: '#A71919', fontWeight: '800' }}>NSE / BSE REAL-TIME</span>
           </div>
 
-          <div style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '10px', color: '#413D36', fontWeight: '700' }}>
+          <div style={{ textTransform: 'uppercase', letterSpacing: '0.14em', fontSize: '10.5px', color: '#413D36', fontWeight: '800', justifySelf: 'center', textAlign: 'center' }}>
             DALAL STREET & INDIAN MARKET INTELLIGENCE
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end' }}>
             <span style={{ fontStyle: 'italic', fontFamily: 'var(--font-serif)', color: '#413D36', fontSize: '12px' }}>
               Markets Move. We Decode.
             </span>
@@ -110,38 +110,62 @@ export default function App() {
         </div>
       </div>
 
-      {/* 2. BROADSHEET MASTHEAD */}
+      {/* 2. BROADSHEET MASTHEAD (PERFECTLY CENTERED MAIN TITLE) */}
       <header style={{ background: '#F5F1E8', borderBottom: '1px solid #C9C1B5', padding: '16px 24px 14px' }}>
-        <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
+        <div className="broadsheet-masthead-grid">
           
-          {/* Masthead Left Column */}
-          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid #C9C1B5', paddingRight: '20px', minWidth: '170px' }}>
-            <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#A71919' }}>
-              DISPATCH VOL. LXXVIII
-            </span>
-            <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '15px', color: '#171717', fontWeight: '600' }}>
+          {/* Masthead Left Column (Ear) */}
+          <div
+            className="broadsheet-masthead-left"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifySelf: 'start',
+              borderRight: '1px solid #C9C1B5',
+              paddingRight: '22px',
+              minWidth: '220px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#A71919' }}>
+                DISPATCH VOL. LXXVIII
+              </span>
+              <span style={{ color: '#C9C1B5' }}>•</span>
+              <span style={{ fontSize: '9px', fontWeight: '700', color: '#736B63', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                DALAL ST.
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '16px', color: '#171717', fontWeight: '700', lineHeight: 1.25, marginTop: '2px' }}>
               The Institutional Desk
             </span>
-            <span style={{ fontSize: '10px', color: '#736B63', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '10px', color: '#736B63', marginTop: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Mumbai Financial District
             </span>
           </div>
 
-          {/* Masthead Center Title */}
-          <div style={{ textAlign: 'center', flex: '1', minWidth: '280px', cursor: 'pointer' }} onClick={() => setActiveTab('dashboard')}>
+          {/* Masthead Center Title - MATHEMATICALLY & OPTICALLY DEAD CENTER */}
+          <div
+            style={{
+              textAlign: 'center',
+              justifySelf: 'center',
+              cursor: 'pointer',
+              padding: '0 16px',
+            }}
+            onClick={() => setActiveTab('dashboard')}
+          >
             <h1 style={{
               fontFamily: 'var(--font-serif)',
-              fontSize: 'clamp(2rem, 3.8vw, 3.2rem)',
+              fontSize: 'clamp(2.2rem, 3.8vw, 3.4rem)',
               fontWeight: '900',
               letterSpacing: '-0.025em',
               lineHeight: 1,
               color: '#171717',
               textTransform: 'uppercase',
-              margin: '0 0 4px 0',
+              margin: '0 0 5px 0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '10px',
             }}>
               <span>Market</span>
               <span style={{ color: '#A71919' }}>News</span>
@@ -150,11 +174,11 @@ export default function App() {
                 color: '#FFFDF8',
                 fontSize: '13px',
                 padding: '2px 8px',
-                borderRadius: '2px',
+                borderRadius: '3px',
                 fontFamily: 'var(--font-sans)',
                 fontWeight: '800',
                 verticalAlign: 'middle',
-                letterSpacing: '0.04em'
+                letterSpacing: '0.04em',
               }}>
                 AI
               </span>
@@ -164,17 +188,29 @@ export default function App() {
               letterSpacing: '0.18em',
               textTransform: 'uppercase',
               color: '#413D36',
-              fontWeight: '600',
-              margin: 0
+              fontWeight: '700',
+              margin: 0,
+              whiteSpace: 'nowrap',
             }}>
               Chartered Financial Chronicle of Dalal Street & NSE / BSE Equities
             </p>
           </div>
 
           {/* Masthead Right: Search Bar & Latency */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', minWidth: '340px', flex: '0 1 480px' }}>
+          <div
+            className="broadsheet-masthead-right"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              justifySelf: 'end',
+              gap: '8px',
+              width: '100%',
+              maxWidth: '380px',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', justifyContent: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, maxWidth: '280px' }}>
                 <StockSearchBar onSelectStock={handleExploreTicker} />
               </div>
               <NotificationCenter onExploreTicker={handleExploreTicker} />
@@ -189,7 +225,7 @@ export default function App() {
                 borderRadius: '3px',
                 padding: '1px 7px',
                 fontWeight: '800',
-                letterSpacing: '0.05em'
+                letterSpacing: '0.05em',
               }}>
                 Zero Cost ₹0 (100% Free)
               </span>
@@ -280,6 +316,7 @@ export default function App() {
         {activeTab === 'analyzer' && (
           <CustomAnalyzerView
             onAddToWatchlist={handleAddToWatchlist}
+            onExploreTicker={handleExploreTicker}
           />
         )}
 

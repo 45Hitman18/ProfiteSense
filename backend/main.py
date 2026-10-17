@@ -1,14 +1,27 @@
 import os
+import sys
+import warnings
+
+warnings.filterwarnings("ignore", category=ResourceWarning)
+
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
+
 import json
+import math
 import asyncio
 import threading
 import uuid
 from datetime import datetime
-from typing import Optional, List
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
+from typing import Optional, List, Union
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+import config
+
 
 from database import init_db, get_connection, save_analysis, DB_PATH
 from nlp_engine import analyze_article, _time_horizons, MANDATORY_DISCLAIMER
@@ -19,8 +32,12 @@ from ml_pipeline import train_all, get_model_metrics, predict_article, export_da
 from stock_collector import fetch_and_store_prices
 from indian_stocks_master import stock_master_index
 from trade_engine import compute_trade_analysis
-from price_brackets import get_stock_price_info, classify_price_bracket, BRACKET_CONFIG
 from notifications_engine import get_live_market_notifications, mark_notification_read
+from telegram_bot import create_link_code, start_telegram_poller, stop_telegram_poller
+from telegram_client import get_telegram_client
+from database import list_telegram_chats, get_telegram_chat
+from price_brackets import get_stock_price_info
+
 
 app = FastAPI(
     title="Market News AI API",
@@ -37,6 +54,17 @@ app.add_middleware(
 )
 
 market_aggregator = MarketAggregator()
+
+def sanitize_floats(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_floats(item) for item in obj]
+    return obj
 
 
 class MLJobTracker:
@@ -145,15 +173,285 @@ async def _periodic_news_sync():
     await asyncio.sleep(15)  # Initial grace period
     while True:
         try:
-            sync_all_news()
+            await asyncio.to_thread(sync_all_news)
+            try:
+                from notifications_engine import clear_notifications_cache
+                clear_notifications_cache()
+            except Exception:
+                pass
         except Exception as e:
             print(f"Background scheduler sync note: {e}")
+
+        try:
+            from telegram_alerts import dispatch_all_pending_alerts, check_and_send_daily_digests
+            dispatch_all_pending_alerts()
+            check_and_send_daily_digests()
+        except Exception as te:
+            print(f"Telegram background dispatch note: {te}")
+
         await asyncio.sleep(1200)  # 20 minutes
+
+
+async def _periodic_digest_checker():
+    """Check every minute if any chat has a scheduled daily digest due."""
+    await asyncio.sleep(30)
+    while True:
+        try:
+            from telegram_alerts import check_and_send_daily_digests
+            check_and_send_daily_digests()
+        except Exception as e:
+            pass
+        await asyncio.sleep(60)
+
 
 @app.on_event("startup")
 async def startup_event():
     init_db()
     asyncio.create_task(_periodic_news_sync())
+    asyncio.create_task(_periodic_digest_checker())
+    start_telegram_poller()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    stop_telegram_poller()
+
+@app.post("/api/telegram/link-code")
+def telegram_link_code():
+    """
+    Generate a secure single-use 10-minute link code and deep link
+    for connecting a Telegram chat to ProfitSense alerts.
+    """
+    return create_link_code()
+
+
+def _verify_admin_access(request: Request):
+    """
+    Verify access for Telegram administrative management endpoints.
+    Allows localhost / loopback calls, or checks X-Admin-Key against ADMIN_API_KEY.
+    """
+    admin_key = getattr(config, "ADMIN_API_KEY", "")
+    if not admin_key:
+        return True
+    header_key = request.headers.get("x-admin-key", "")
+    if header_key and header_key == admin_key:
+        return True
+    client_host = getattr(request.client, "host", "") if request.client else ""
+    if client_host in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return True
+    raise HTTPException(status_code=403, detail="Unauthorized: Invalid admin key")
+
+
+class TelegramSettingsRequest(BaseModel):
+    chat_id: str
+    min_impact: Optional[str] = None
+    min_confidence: Optional[float] = None
+    directions: Optional[List[str]] = None
+    quiet_start: Optional[str] = None
+    quiet_end: Optional[str] = None
+    watchlist_only: Optional[int] = None
+    price_brackets: Optional[Union[List[str], str]] = None
+    digest_enabled: Optional[int] = None
+    digest_time: Optional[str] = None
+    muted_until: Optional[str] = None
+
+
+class TelegramTestSendRequest(BaseModel):
+    chat_id: Optional[str] = None
+
+
+@app.get("/api/telegram/status")
+def telegram_status(request: Request):
+    """
+    Return Telegram bot status, configuration state, and linked chats.
+    Never exposes TELEGRAM_BOT_TOKEN.
+    """
+    _verify_admin_access(request)
+    client = get_telegram_client()
+    bot_info = None
+    if getattr(config, "TELEGRAM_ENABLED", False) and client.is_configured:
+        try:
+            me_res = client.get_me()
+            if me_res.get("ok"):
+                bot_info = me_res.get("result", {}).get("username")
+        except Exception:
+            pass
+
+    chats = list_telegram_chats()
+    active_count = sum(1 for c in chats if c.get("is_active") == 1)
+
+    formatted_chats = []
+    for c in chats:
+        dirs = []
+        try:
+            dirs = json.loads(c.get("directions") or "[]")
+        except Exception:
+            dirs = ["BULLISH", "BEARISH"]
+
+        formatted_chats.append({
+            "chat_id": c.get("chat_id"),
+            "username": c.get("username") or "",
+            "is_active": c.get("is_active", 0),
+            "created_at": c.get("created_at"),
+            "muted_until": c.get("muted_until"),
+            "quiet_start": c.get("quiet_start"),
+            "quiet_end": c.get("quiet_end"),
+            "min_confidence": c.get("min_confidence", 0.6),
+            "min_impact": c.get("min_impact", "HIGH"),
+            "directions": dirs,
+            "watchlist_only": c.get("watchlist_only", 0),
+            "digest_enabled": c.get("digest_enabled", 1),
+            "digest_time": c.get("digest_time", "18:30"),
+            "price_brackets": c.get("price_brackets", '["0-500", "500-1000", "1000+"]'),
+        })
+
+    return {
+        "enabled": getattr(config, "TELEGRAM_ENABLED", False),
+        "configured": client.is_configured,
+        "bot_username": bot_info,
+        "active_chats_count": active_count,
+        "total_chats_count": len(chats),
+        "chats": formatted_chats,
+        "app_base_url": getattr(config, "APP_BASE_URL", "http://localhost:5173"),
+    }
+
+
+@app.post("/api/telegram/settings")
+def update_telegram_settings(req: TelegramSettingsRequest, request: Request):
+    """Update alert preferences for a specific chat."""
+    _verify_admin_access(request)
+    chat = get_telegram_chat(req.chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail=f"Telegram chat '{req.chat_id}' not found.")
+
+    updates = []
+    params = []
+
+    if req.min_impact is not None:
+        impact_val = req.min_impact.strip().upper()
+        if impact_val not in ("HIGH", "MEDIUM", "ALL"):
+            raise HTTPException(status_code=400, detail="min_impact must be HIGH, MEDIUM, or ALL.")
+        updates.append("min_impact = ?")
+        params.append(impact_val)
+
+    if req.min_confidence is not None:
+        conf_val = float(req.min_confidence)
+        if conf_val > 1.0:
+            conf_val /= 100.0
+        conf_val = max(0.0, min(1.0, conf_val))
+        updates.append("min_confidence = ?")
+        params.append(conf_val)
+
+    if req.directions is not None:
+        dirs_json = json.dumps([d.upper() for d in req.directions])
+        updates.append("directions = ?")
+        params.append(dirs_json)
+
+    if req.quiet_start is not None:
+        updates.append("quiet_start = ?")
+        params.append(req.quiet_start.strip() if req.quiet_start else None)
+
+    if req.quiet_end is not None:
+        updates.append("quiet_end = ?")
+        params.append(req.quiet_end.strip() if req.quiet_end else None)
+
+    if req.watchlist_only is not None:
+        updates.append("watchlist_only = ?")
+        params.append(1 if req.watchlist_only else 0)
+
+    if req.digest_enabled is not None:
+        updates.append("digest_enabled = ?")
+        params.append(1 if req.digest_enabled else 0)
+
+    if req.digest_time is not None:
+        updates.append("digest_time = ?")
+        params.append(req.digest_time.strip() or "18:30")
+
+    if req.muted_until is not None:
+        updates.append("muted_until = ?")
+        params.append(req.muted_until if req.muted_until else None)
+
+    if req.price_brackets is not None:
+        if isinstance(req.price_brackets, list):
+            b_json = json.dumps(req.price_brackets)
+        elif req.price_brackets.strip().upper() == "ALL":
+            b_json = json.dumps(["0-500", "500-1000", "1000+"])
+        else:
+            b_json = json.dumps([req.price_brackets.strip()])
+        updates.append("price_brackets = ?")
+        params.append(b_json)
+
+    if updates:
+        params.append(req.chat_id)
+        conn = get_connection()
+        try:
+            conn.execute(f"UPDATE telegram_chats SET {', '.join(updates)} WHERE chat_id = ?", tuple(params))
+            conn.commit()
+        finally:
+            conn.close()
+
+    updated_chat = get_telegram_chat(req.chat_id)
+    return {"success": True, "message": "Settings updated successfully", "chat": updated_chat}
+
+
+@app.post("/api/telegram/test-send")
+def telegram_test_send(req: TelegramTestSendRequest, request: Request):
+    """Send a test notification to one or all active chats."""
+    _verify_admin_access(request)
+    client = get_telegram_client()
+    if not getattr(config, "TELEGRAM_ENABLED", False) or not client.is_configured:
+        raise HTTPException(status_code=400, detail="Telegram is not configured or disabled in .env.")
+
+    target_chats = []
+    if req.chat_id:
+        c = get_telegram_chat(req.chat_id)
+        if not c:
+            raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found.")
+        target_chats.append(c)
+    else:
+        target_chats = list_telegram_chats(active_only=True)
+
+    if not target_chats:
+        raise HTTPException(status_code=400, detail="No active linked Telegram chats found to send test message to.")
+
+    test_msg = (
+        "🔔 <b>ProfitSense Test Alert</b>\n\n"
+        "Your Telegram alert pipeline is active and verified!\n"
+        "Real-time breaking market catalysts, technical trade signals, and evening digests will arrive here.\n\n"
+        f"<i>{MANDATORY_DISCLAIMER}</i>"
+    )
+
+    sent = 0
+    errors = []
+    for c in target_chats:
+        cid = str(c["chat_id"])
+        res = client.send_message(cid, test_msg)
+        if res.get("ok"):
+            sent += 1
+        else:
+            errors.append(f"{cid}: {res.get('description', 'Failed')}")
+
+    if sent == 0 and errors:
+        return {"success": False, "message": "Failed to deliver test message: " + "; ".join(errors), "delivered_count": 0}
+
+    return {"success": True, "message": f"Test message delivered to {sent} chat(s)", "delivered_count": sent}
+
+
+@app.delete("/api/telegram/chat/{chat_id}")
+def delete_telegram_chat(chat_id: str, request: Request):
+    """Disconnect and deactivate a linked Telegram chat."""
+    _verify_admin_access(request)
+    conn = get_connection()
+    try:
+        cur = conn.execute("UPDATE telegram_chats SET is_active = 0 WHERE chat_id = ?", (str(chat_id),))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Chat '{chat_id}' not found.")
+    finally:
+        conn.close()
+
+    return {"success": True, "message": f"Chat '{chat_id}' disconnected successfully"}
+
 
 @app.get("/")
 def root():
@@ -270,12 +568,17 @@ class NotificationReadRequest(BaseModel):
 
 
 @app.get("/api/notifications")
-def get_notifications(limit: int = Query(25, ge=1, le=50), force: bool = Query(False)):
+def get_notifications(
+    limit: int = Query(25, ge=1, le=50),
+    force: bool = Query(False),
+    price_bracket: Optional[str] = Query(None)
+):
     """
     Return live, ML-trained and technical-backed market trade advice notifications:
     'You can buy this share' / 'Don't hold this share'.
+    Supports price_bracket filtering: '0-500', '500-1000', '1000+', or 'all'.
     """
-    notifs = get_live_market_notifications(limit=limit, force_refresh=force)
+    notifs = get_live_market_notifications(limit=limit, force_refresh=force, price_bracket=price_bracket)
     unread = sum(1 for n in notifs if not n.get("read"))
     return {
         "notifications": notifs,
@@ -407,74 +710,160 @@ def get_news(
     {order_clause}
     """
 
-    cursor.execute(select_sql, params)
-    all_rows = cursor.fetchall()
-    conn.close()
-
     def _j(v):
         try:
             return json.loads(v) if v else {}
         except Exception:
             return {}
 
-    # Filter by price_bracket if specified
-    filtered_rows = []
-    for r in all_rows:
-        t = r["ticker"]
-        pinfo = get_stock_price_info(t)
-        if price_bracket and price_bracket != "ALL":
-            if pinfo["bracket_id"] != price_bracket:
-                continue
-        filtered_rows.append((r, pinfo))
+    # 1. Fast Path: When price_bracket is "ALL" or not set (99% of requests)
+    if not price_bracket or price_bracket == "ALL":
+        count_sql = f"SELECT COUNT(*) FROM articles a JOIN analysis an ON a.id = an.article_id {where_sql}"
+        cursor.execute(count_sql, params)
+        total_count = cursor.fetchone()[0]
 
-    total_count = len(filtered_rows)
-    sliced = filtered_rows[offset:offset + limit]
+        paginated_sql = f"""
+        SELECT
+            a.id, a.title, a.summary, a.source, a.url, a.published_at, a.category,
+            an.sentiment, an.sentiment_score, an.direction, an.impact_level,
+            an.confidence, an.ticker, an.company_name, an.sector,
+            an.event_type, an.event_display, an.secondary_categories,
+            an.scope, an.affected_sectors, an.all_entities,
+            an.sentiment_breakdown,
+            an.reason_explanation, an.time_horizons, an.historical_precedents,
+            an.created_at
+        FROM articles a
+        JOIN analysis an ON a.id = an.article_id
+        {where_sql}
+        {order_clause}
+        LIMIT ? OFFSET ?
+        """
+        cursor.execute(paginated_sql, params + [limit, offset])
+        sliced_rows = cursor.fetchall()
+        conn.close()
 
-    items = []
-    for r, pinfo in sliced:
-        items.append({
-            "id": r["id"],
-            "title": r["title"],
-            "summary": r["summary"],
-            "source": r["source"],
-            "url": r["url"],
-            "published_at": r["published_at"],
-            "category": r["category"],
-            "stock_price": pinfo["price"],
-            "price_bracket": pinfo["bracket_id"],
-            "price_bracket_label": pinfo["bracket_label"],
-            "price_bracket_color": pinfo["bracket_color"],
-            "price_bracket_bg": pinfo["bracket_bg"],
-            "price_bracket_border": pinfo["bracket_border"],
-            "compliance_disclaimer": MANDATORY_DISCLAIMER,
-            "analysis": {
-                "sentiment":             r["sentiment"],
-                "sentiment_score":       r["sentiment_score"],
-                "sentiment_breakdown":   _j(r["sentiment_breakdown"]),
-                "direction":             r["direction"],
-                "impact_level":          r["impact_level"],
-                "confidence":            r["confidence"],
-                "ticker":                r["ticker"],
-                "company_name":          r["company_name"],
-                "sector":                r["sector"],
-                "stock_price":           pinfo["price"],
-                "price_bracket":         pinfo["bracket_id"],
-                "price_bracket_label":   pinfo["bracket_label"],
-                "price_bracket_color":   pinfo["bracket_color"],
-                "price_bracket_bg":      pinfo["bracket_bg"],
-                "price_bracket_border":  pinfo["bracket_border"],
-                "all_entities":          _j(r["all_entities"]),
-                "event_type":            r["event_type"],
-                "event_display":         r["event_display"],
-                "secondary_categories":  _j(r["secondary_categories"]),
-                "scope":                 r["scope"],
-                "affected_sectors":      _j(r["affected_sectors"]),
-                "reason_explanation":    r["reason_explanation"],
-                "time_horizons":         _j(r["time_horizons"]),
-                "historical_precedents": _j(r["historical_precedents"]),
+        items = []
+        for r in sliced_rows:
+            pinfo = get_stock_price_info(r["ticker"])
+            items.append({
+                "id": r["id"],
+                "title": r["title"],
+                "summary": r["summary"],
+                "source": r["source"],
+                "url": r["url"],
+                "published_at": r["published_at"],
+                "category": r["category"],
+                "stock_price": pinfo["price"],
+                "price_bracket": pinfo["bracket_id"],
+                "price_bracket_label": pinfo["bracket_label"],
+                "price_bracket_color": pinfo["bracket_color"],
+                "price_bracket_bg": pinfo["bracket_bg"],
+                "price_bracket_border": pinfo["bracket_border"],
                 "compliance_disclaimer": MANDATORY_DISCLAIMER,
-            }
-        })
+                "analysis": {
+                    "sentiment":             r["sentiment"],
+                    "sentiment_score":       r["sentiment_score"],
+                    "sentiment_breakdown":   _j(r["sentiment_breakdown"]),
+                    "direction":             r["direction"],
+                    "impact_level":          r["impact_level"],
+                    "confidence":            r["confidence"],
+                    "ticker":                r["ticker"],
+                    "company_name":          r["company_name"],
+                    "sector":                r["sector"],
+                    "stock_price":           pinfo["price"],
+                    "price_bracket":         pinfo["bracket_id"],
+                    "price_bracket_label":   pinfo["bracket_label"],
+                    "price_bracket_color":   pinfo["bracket_color"],
+                    "price_bracket_bg":      pinfo["bracket_bg"],
+                    "price_bracket_border":  pinfo["bracket_border"],
+                    "all_entities":          _j(r["all_entities"]),
+                    "event_type":            r["event_type"],
+                    "event_display":         r["event_display"],
+                    "secondary_categories":  _j(r["secondary_categories"]),
+                    "scope":                 r["scope"],
+                    "affected_sectors":      _j(r["affected_sectors"]),
+                    "reason_explanation":    r["reason_explanation"],
+                    "time_horizons":         _j(r["time_horizons"]),
+                    "historical_precedents": _j(r["historical_precedents"]),
+                    "compliance_disclaimer": MANDATORY_DISCLAIMER,
+                }
+            })
+
+    # 2. Filtered Path: When specific price_bracket is chosen (e.g. UNDER_500)
+    else:
+        select_sql = f"""
+        SELECT
+            a.id, a.title, a.summary, a.source, a.url, a.published_at, a.category,
+            an.sentiment, an.sentiment_score, an.direction, an.impact_level,
+            an.confidence, an.ticker, an.company_name, an.sector,
+            an.event_type, an.event_display, an.secondary_categories,
+            an.scope, an.affected_sectors, an.all_entities,
+            an.sentiment_breakdown,
+            an.reason_explanation, an.time_horizons, an.historical_precedents,
+            an.created_at
+        FROM articles a
+        JOIN analysis an ON a.id = an.article_id
+        {where_sql}
+        {order_clause}
+        """
+        cursor.execute(select_sql, params)
+        all_rows = cursor.fetchall()
+        conn.close()
+
+        filtered_rows = []
+        for r in all_rows:
+            pinfo = get_stock_price_info(r["ticker"])
+            if pinfo["bracket_id"] == price_bracket:
+                filtered_rows.append((r, pinfo))
+
+        total_count = len(filtered_rows)
+        sliced = filtered_rows[offset:offset + limit]
+
+        items = []
+        for r, pinfo in sliced:
+            items.append({
+                "id": r["id"],
+                "title": r["title"],
+                "summary": r["summary"],
+                "source": r["source"],
+                "url": r["url"],
+                "published_at": r["published_at"],
+                "category": r["category"],
+                "stock_price": pinfo["price"],
+                "price_bracket": pinfo["bracket_id"],
+                "price_bracket_label": pinfo["bracket_label"],
+                "price_bracket_color": pinfo["bracket_color"],
+                "price_bracket_bg": pinfo["bracket_bg"],
+                "price_bracket_border": pinfo["bracket_border"],
+                "compliance_disclaimer": MANDATORY_DISCLAIMER,
+                "analysis": {
+                    "sentiment":             r["sentiment"],
+                    "sentiment_score":       r["sentiment_score"],
+                    "sentiment_breakdown":   _j(r["sentiment_breakdown"]),
+                    "direction":             r["direction"],
+                    "impact_level":          r["impact_level"],
+                    "confidence":            r["confidence"],
+                    "ticker":                r["ticker"],
+                    "company_name":          r["company_name"],
+                    "sector":                r["sector"],
+                    "stock_price":           pinfo["price"],
+                    "price_bracket":         pinfo["bracket_id"],
+                    "price_bracket_label":   pinfo["bracket_label"],
+                    "price_bracket_color":   pinfo["bracket_color"],
+                    "price_bracket_bg":      pinfo["bracket_bg"],
+                    "price_bracket_border":  pinfo["bracket_border"],
+                    "all_entities":          _j(r["all_entities"]),
+                    "event_type":            r["event_type"],
+                    "event_display":         r["event_display"],
+                    "secondary_categories":  _j(r["secondary_categories"]),
+                    "scope":                 r["scope"],
+                    "affected_sectors":      _j(r["affected_sectors"]),
+                    "reason_explanation":    r["reason_explanation"],
+                    "time_horizons":         _j(r["time_horizons"]),
+                    "historical_precedents": _j(r["historical_precedents"]),
+                    "compliance_disclaimer": MANDATORY_DISCLAIMER,
+                }
+            })
 
     return {
         "page": page,
@@ -583,6 +972,11 @@ def get_news_detail(article_id: str):
 @app.post("/api/news/sync")
 async def trigger_news_sync(background_tasks: BackgroundTasks):
     result = await asyncio.to_thread(sync_all_news)
+    try:
+        from notifications_engine import clear_notifications_cache
+        clear_notifications_cache()
+    except Exception:
+        pass
     return result
 
 @app.post("/api/news/analyze-custom")
@@ -650,7 +1044,30 @@ def get_ticker_details(ticker: str):
         bullish_pct = 50.0
         bearish_pct = 50.0
         
-    return {
+    if not quote:
+        stock_meta = stock_master_index.get_by_ticker(clean_ticker) or {}
+        comp_name = stock_meta.get("company_name") or clean_ticker
+        sector_name = stock_meta.get("sector") or "Equities"
+        quote = {
+            "ticker": clean_ticker,
+            "company_name": comp_name,
+            "price": 0.0,
+            "prev_close": 0.0,
+            "change_amount": 0.0,
+            "change_pct": 0.0,
+            "high_52w": 0.0,
+            "low_52w": 0.0,
+            "market_cap": 0.0,
+            "volume": 0,
+            "pe_ratio": None,
+            "sector": sector_name,
+            "sparkline": [],
+            "status": "available",
+            "provider": "NSE/BSE Master Directory",
+            "last_updated": datetime.now().isoformat()
+        }
+
+    return sanitize_floats({
         "quote": quote,
         "chart": chart,
         "related_news": related_news,
@@ -661,18 +1078,26 @@ def get_ticker_details(ticker: str):
             "neutral_pct": round(100.0 - bullish_pct - bearish_pct, 1),
             "signal": "BULLISH" if bullish_pct > 55 else ("BEARISH" if bearish_pct > 55 else "NEUTRAL")
         }
-    }
+    })
 
 @app.get("/api/market/overview")
-def get_market_summary():
+def get_market_summary(scope: str = "live"):
     overview = market_aggregator.get_market_overview()
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT an.ticker, an.company_name, an.sentiment, COUNT(*) as cnt
+    
+    # If scope is 'live', focus on active ingested articles (excluding static offline Indic-Finance ML dataset)
+    and_filter = "AND (a.source_dataset != 'indic_finance' OR a.source_dataset IS NULL)" if scope == "live" else ""
+    where_filter = "WHERE (a.source_dataset != 'indic_finance' OR a.source_dataset IS NULL)" if scope == "live" else ""
+
+    cursor.execute(f"""
+        SELECT an.ticker, MAX(an.company_name) as company_name, MAX(an.sentiment) as sentiment, COUNT(*) as cnt
         FROM analysis an
-        WHERE an.ticker NOT GLOB '[0-9]*' AND LENGTH(an.ticker) >= 2 AND an.ticker NOT IN ('SPY', 'NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN')
-        GROUP BY an.ticker, an.company_name
+        JOIN articles a ON an.article_id = a.id
+        WHERE an.ticker NOT GLOB '[0-9]*' AND LENGTH(an.ticker) >= 2 
+          AND an.ticker NOT IN ('SPY', 'NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN')
+          {and_filter}
+        GROUP BY an.ticker
         ORDER BY cnt DESC
         LIMIT 6
     """)
@@ -687,20 +1112,39 @@ def get_market_summary():
         })
     overview["top_tickers"] = top_tickers
     
-    cursor.execute("SELECT sentiment, COUNT(*) FROM analysis GROUP BY sentiment")
+    # Sentiment distribution for selected scope (accumulates properly, does not overwrite)
+    cursor.execute(f"""
+        SELECT an.sentiment, COUNT(*) 
+        FROM analysis an
+        JOIN articles a ON an.article_id = a.id
+        {where_filter}
+        GROUP BY an.sentiment
+    """)
     dist = {"positive": 0, "neutral": 0, "negative": 0}
     for row in cursor.fetchall():
         s = (row[0] or "").lower()
         if s in dist:
-            dist[s] = row[1]
+            dist[s] += row[1]
     overview["sentiment_distribution"] = dist
     overview["total_analyzed"] = sum(dist.values())
+    overview["scope"] = scope
+    
+    # Also provide all-time distribution for transparency
+    cursor.execute("SELECT sentiment, COUNT(*) FROM analysis GROUP BY sentiment")
+    all_time_dist = {"positive": 0, "neutral": 0, "negative": 0}
+    for row in cursor.fetchall():
+        s = (row[0] or "").lower()
+        if s in all_time_dist:
+            all_time_dist[s] += row[1]
+    overview["all_time_distribution"] = all_time_dist
+    overview["all_time_total"] = sum(all_time_dist.values())
+    
     conn.close()
-    return overview
+    return sanitize_floats(overview)
 
 @app.get("/api/market/sectors")
 def get_sectors():
-    return market_aggregator.get_sectors()
+    return sanitize_floats(market_aggregator.get_sectors())
 
 @app.get("/api/watchlist")
 def get_watchlist():
@@ -713,7 +1157,7 @@ def get_watchlist():
     items = []
     for r in rows:
         t = r["ticker"]
-        quote = market_aggregator.get_quote(t)
+        quote = sanitize_floats(market_aggregator.get_quote(t))
         items.append({
             "ticker": t,
             "company_name": r["company_name"] or quote.get("company_name", t),
@@ -1314,3 +1758,46 @@ def get_trade_analysis(
     )
     result["compliance_disclaimer"] = MANDATORY_DISCLAIMER
     return result
+
+
+# ════════════════════════════════════════════════════════════════
+# TRADINGVIEW / LIGHTWEIGHT CHARTS API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/chart/{ticker}")
+def get_chart_ohlcv(
+    ticker: str,
+    interval: str = Query("1d", description="Interval: 1m | 5m | 15m | 1h | 1d | 1wk"),
+    range: Optional[str] = Query(None, description="Range: 1d | 5d | 1mo | 3mo | 6mo | 1y | 5y | max")
+):
+    """
+    Get clean OHLCV bars formatted for TradingView lightweight-charts (v5).
+    - Intraday time: UTC unix timestamp in seconds
+    - Daily/weekly time: 'YYYY-MM-DD' string
+    - MultiIndex flattened, deduplicated, sorted ascending, NaNs dropped.
+    """
+    try:
+        from chart_service import get_chart_data
+        return get_chart_data(ticker=ticker, interval=interval, range_val=range)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch chart data: {str(e)}")
+
+
+@app.get("/api/chart/{ticker}/events")
+def get_chart_annotations(
+    ticker: str,
+    from_date: Optional[str] = Query(None, alias="from", description="Start timestamp or date"),
+    to_date: Optional[str] = Query(None, alias="to", description="End timestamp or date"),
+    limit: int = Query(40, ge=1, le=100)
+):
+    """
+    Get news articles and ML predictions as chart annotation markers.
+    """
+    try:
+        from chart_service import get_chart_events
+        return get_chart_events(ticker=ticker, from_date=from_date, to_date=to_date, limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch chart events: {str(e)}")
+

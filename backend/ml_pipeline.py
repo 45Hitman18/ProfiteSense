@@ -52,8 +52,9 @@ try:
     from sklearn.preprocessing import LabelEncoder, StandardScaler
     from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, TimeSeriesSplit
     from sklearn.pipeline import Pipeline
+    from sklearn.dummy import DummyClassifier
     from sklearn.metrics import (
-        accuracy_score, precision_score, recall_score,
+        accuracy_score, balanced_accuracy_score, precision_score, recall_score,
         f1_score, confusion_matrix, classification_report
     )
     HAS_SKLEARN = True
@@ -70,8 +71,12 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 DATASET_CSV_PATH = os.path.join(os.path.dirname(__file__), "dataset_export.csv")
 
-MIN_SAMPLES = 10            # Minimum labeled samples per horizon for training (supports realistic small-sample bootstrapping)
-RETURN_THRESHOLD = 0.5      # % move threshold for Positive/Negative class
+MIN_SAMPLES = 10                # Minimum labeled samples per horizon for dataset existence
+MIN_TEST_SAMPLES = 200          # Safeguard: never present test metrics if n_test < 200 (show insufficient data)
+RETURN_THRESHOLD = 0.5          # Default fixed % move threshold for Positive/Negative class
+DEFAULT_VOLATILITY_K = 0.5      # Default multiplier for volatility-scaled threshold (k * vol)
+DEFAULT_THRESHOLD_FLOOR = 0.25  # Minimum threshold % floor (25 bps)
+DEFAULT_THRESHOLD_CAP = 3.0     # Maximum threshold % cap (300 bps)
 
 FEATURE_NAMES = [
     "sentiment_score",
@@ -205,38 +210,114 @@ def _get_market_trend(ref_date: str) -> float:
             c_now = past_entries[-1][1]
             c_5ago = past_entries[-6][1]
             if c_5ago > 0:
-                return round(((c_now - c_5ago) / c_5ago) * 100, 4)
+                trend = ((c_now - c_5ago) / c_5ago) * 100.0
+                # If benchmark data is more than 2 days older than ref_date, decay stale market impact
+                try:
+                    last_dt = datetime.strptime(past_entries[-1][0][:10], "%Y-%m-%d")
+                    curr_dt = datetime.strptime(ref_date[:10], "%Y-%m-%d")
+                    if (curr_dt - last_dt).days > 2:
+                        trend = trend * 0.4
+                except Exception:
+                    pass
+                return round(trend, 4)
     return 0.0
 
 
 # ══════════════════════════════════════════════════════════════════
 # 2.  LABEL BUILDER & FUTURE RETURN
 # ══════════════════════════════════════════════════════════════════
-def _return_to_class(ret: float) -> str:
-    if ret > RETURN_THRESHOLD:
-        return "Positive"
-    if ret < -RETURN_THRESHOLD:
-        return "Negative"
-    return "Neutral"
+def _get_benchmark_close(
+    cache: StockPriceCache,
+    benchmark_ticker: str = "^NSEI",
+    target_date: str = "",
+    max_diff_days: int = 3
+) -> Tuple[Optional[float], Optional[str]]:
+    """
+    Look up benchmark closing price on target_date.
+    If exact date is missing (e.g. slight trading-calendar mismatch),
+    finds the closest available trading day within max_diff_days.
+    Returns: (close_price, matched_date)
+    """
+    if not target_date:
+        return None, None
+
+    # 1. Exact lookup
+    p = cache.close_lookup.get((benchmark_ticker, target_date))
+    if p is not None and p > 0:
+        return p, target_date
+
+    # 2. Fuzzy match within max_diff_days
+    entries = cache.prices_by_ticker.get(benchmark_ticker, [])
+    if not entries:
+        return None, None
+
+    try:
+        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+    except Exception:
+        return None, None
+
+    best_p = None
+    best_date = None
+    min_diff = 9999
+    for dt_str, c, _ in entries:
+        try:
+            diff = abs((datetime.strptime(dt_str, "%Y-%m-%d") - target_dt).days)
+            if diff < min_diff:
+                min_diff = diff
+                best_p = c
+                best_date = dt_str
+        except Exception:
+            continue
+
+    if min_diff <= max_diff_days and best_p is not None and best_p > 0:
+        return best_p, best_date
+    return None, None
 
 
-def _get_future_return(ticker: str, pub_date: str, n_days: int) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+def compute_excess_return(
+    ticker: str,
+    pub_date: str,
+    n_days: int,
+    benchmark_ticker: str = "^NSEI",
+    cache: Optional[StockPriceCache] = None
+) -> Dict[str, Any]:
     """
-    Look up (start_price, end_price, return_pct) for ticker n_days after pub_date.
-    Uses calendar buffer to accommodate weekends & market holidays.
+    Compute stock return and benchmark-relative excess return over identical trading days.
+    Formula: excess_return = stock_return - benchmark_return
+    Fall back to raw return if benchmark data is missing, and flag benchmark_missing = True.
     """
-    cache = get_price_cache()
+    if cache is None:
+        cache = get_price_cache()
+
     entries = cache.prices_by_ticker.get(ticker, [])
     if not entries:
-        return None, None, None
+        return {
+            "start_date": None, "end_date": None,
+            "start_price": None, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
 
     # Start price: on or first trading day after pub_date
     start_entries = [e for e in entries if e[0] >= pub_date]
     if not start_entries:
-        return None, None, None
+        return {
+            "start_date": None, "end_date": None,
+            "start_price": None, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
     start_date, start_price, _ = start_entries[0]
     if start_price <= 0:
-        return None, None, None
+        return {
+            "start_date": start_date, "end_date": None,
+            "start_price": None, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
 
     # Target date window: [pub_date + n_days, pub_date + n_days + 4]
     try:
@@ -244,27 +325,212 @@ def _get_future_return(ticker: str, pub_date: str, n_days: int) -> Tuple[Optiona
         min_target = (ref_dt + timedelta(days=n_days)).strftime("%Y-%m-%d")
         max_target = (ref_dt + timedelta(days=n_days + 4)).strftime("%Y-%m-%d")
     except ValueError:
-        return None, None, None
+        return {
+            "start_date": start_date, "end_date": None,
+            "start_price": start_price, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
 
     end_entries = [e for e in entries if min_target <= e[0] <= max_target]
     if not end_entries:
-        return None, None, None
+        return {
+            "start_date": start_date, "end_date": None,
+            "start_price": start_price, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
 
     end_date, end_price, _ = end_entries[0]
     if end_price <= 0:
-        return None, None, None
+        return {
+            "start_date": start_date, "end_date": end_date,
+            "start_price": start_price, "end_price": None,
+            "stock_return": None, "benchmark_return": None,
+            "excess_return": None, "benchmark_missing": True,
+            "chosen_return": None
+        }
 
-    ret = ((end_price - start_price) / start_price) * 100
-    return start_price, end_price, round(ret, 4)
+    stock_ret = round(((end_price - start_price) / start_price) * 100, 4)
+
+    # Benchmark return over aligned trading days
+    bench_start_p, _ = _get_benchmark_close(cache, benchmark_ticker, start_date)
+    bench_end_p, _ = _get_benchmark_close(cache, benchmark_ticker, end_date)
+
+    if bench_start_p and bench_end_p and bench_start_p > 0:
+        bench_ret = round(((bench_end_p - bench_start_p) / bench_start_p) * 100, 4)
+        excess_ret = round(stock_ret - bench_ret, 4)
+        bench_missing = False
+    else:
+        bench_ret = None
+        excess_ret = stock_ret
+        bench_missing = True
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "start_price": start_price,
+        "end_price": end_price,
+        "stock_return": stock_ret,
+        "benchmark_return": bench_ret,
+        "excess_return": excess_ret,
+        "benchmark_missing": bench_missing,
+        "chosen_return": excess_ret if not bench_missing else stock_ret
+    }
 
 
-def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], Dict[str, int]]]:
+def _get_future_return(ticker: str, pub_date: str, n_days: int) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """
+    Look up (start_price, end_price, return_pct) for ticker n_days after pub_date.
+    Maintained for full backward-compatibility.
+    """
+    res = compute_excess_return(ticker, pub_date, n_days)
+    return res["start_price"], res["end_price"], res["stock_return"]
+
+
+def compute_volatility_threshold(
+    volatility: Optional[float],
+    k: float = DEFAULT_VOLATILITY_K,
+    floor: float = DEFAULT_THRESHOLD_FLOOR,
+    cap: float = DEFAULT_THRESHOLD_CAP,
+    default_threshold: float = RETURN_THRESHOLD
+) -> float:
+    """
+    Calculate point-in-time volatility-scaled threshold:
+    threshold = max(floor, min(cap, k * historical_volatility))
+    """
+    if volatility is None or np.isnan(volatility) or volatility <= 0:
+        return default_threshold
+    raw_thresh = k * float(volatility)
+    return round(max(floor, min(cap, raw_thresh)), 4)
+
+
+def return_to_class(
+    ret: Optional[float],
+    volatility: Optional[float] = None,
+    mode: str = "volatility_scaled",
+    k: float = DEFAULT_VOLATILITY_K,
+    floor: float = DEFAULT_THRESHOLD_FLOOR,
+    cap: float = DEFAULT_THRESHOLD_CAP,
+    fixed_threshold: float = RETURN_THRESHOLD
+) -> str:
+    """
+    Convert return % to classification label: 'Positive', 'Neutral', or 'Negative'.
+    Supports both 'volatility_scaled' (default) and 'fixed' modes for comparison.
+    """
+    if ret is None or np.isnan(ret):
+        return "UNLABELED"
+
+    if mode == "volatility_scaled" and volatility is not None and volatility > 0:
+        thresh = compute_volatility_threshold(volatility, k=k, floor=floor, cap=cap, default_threshold=fixed_threshold)
+    else:
+        thresh = fixed_threshold
+
+    if ret > thresh:
+        return "Positive"
+    if ret < -thresh:
+        return "Negative"
+    return "Neutral"
+
+
+def _return_to_class(ret: float) -> str:
+    """Legacy fixed-threshold return-to-class mapping (0.5%)."""
+    return return_to_class(ret, mode="fixed", fixed_threshold=RETURN_THRESHOLD)
+
+
+def evaluate_baselines(
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+    sentiment_scores_test: Optional[np.ndarray] = None,
+    sentiment_threshold: float = 0.05,
+    random_state: int = 42
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Compute 3 standard baseline classifiers on the test set:
+    (a) Majority class: always predicts most frequent class in y_train
+    (b) Sentiment-sign rule: Positive if sentiment > 0.05, Negative if < -0.05, Neutral otherwise
+    (c) Random stratified: predicts according to training class distribution
+    """
+    from collections import Counter
+    results = {}
+
+    # (a) Majority class
+    train_counts = Counter(y_train)
+    majority_class = train_counts.most_common(1)[0][0] if train_counts else "Neutral"
+    y_pred_maj = np.array([majority_class] * len(y_test))
+
+    results["majority_class"] = {
+        "predicted_class": majority_class,
+        "accuracy": round(float(accuracy_score(y_test, y_pred_maj)), 4),
+        "balanced_accuracy": round(float(balanced_accuracy_score(y_test, y_pred_maj)), 4),
+        "f1_macro": round(float(f1_score(y_test, y_pred_maj, average="macro", zero_division=0)), 4),
+        "precision_macro": round(float(precision_score(y_test, y_pred_maj, average="macro", zero_division=0)), 4),
+        "recall_macro": round(float(recall_score(y_test, y_pred_maj, average="macro", zero_division=0)), 4),
+    }
+
+    # (b) Sentiment-sign rule
+    if sentiment_scores_test is not None and len(sentiment_scores_test) == len(y_test):
+        y_pred_sent = []
+        for s in sentiment_scores_test:
+            try:
+                s_val = float(s) if s is not None and not np.isnan(s) else 0.0
+            except Exception:
+                s_val = 0.0
+            if s_val > sentiment_threshold:
+                y_pred_sent.append("Positive")
+            elif s_val < -sentiment_threshold:
+                y_pred_sent.append("Negative")
+            else:
+                y_pred_sent.append("Neutral")
+        y_pred_sent = np.array(y_pred_sent)
+        results["sentiment_sign"] = {
+            "threshold": sentiment_threshold,
+            "accuracy": round(float(accuracy_score(y_test, y_pred_sent)), 4),
+            "balanced_accuracy": round(float(balanced_accuracy_score(y_test, y_pred_sent)), 4),
+            "f1_macro": round(float(f1_score(y_test, y_pred_sent, average="macro", zero_division=0)), 4),
+            "precision_macro": round(float(precision_score(y_test, y_pred_sent, average="macro", zero_division=0)), 4),
+            "recall_macro": round(float(recall_score(y_test, y_pred_sent, average="macro", zero_division=0)), 4),
+        }
+    else:
+        results["sentiment_sign"] = None
+
+    # (c) Random stratified
+    dummy = DummyClassifier(strategy="stratified", random_state=random_state)
+    dummy.fit(np.zeros((len(y_train), 1)), y_train)
+    y_pred_rand = dummy.predict(np.zeros((len(y_test), 1)))
+
+    results["random_stratified"] = {
+        "strategy": "stratified",
+        "accuracy": round(float(accuracy_score(y_test, y_pred_rand)), 4),
+        "balanced_accuracy": round(float(balanced_accuracy_score(y_test, y_pred_rand)), 4),
+        "f1_macro": round(float(f1_score(y_test, y_pred_rand, average="macro", zero_division=0)), 4),
+        "precision_macro": round(float(precision_score(y_test, y_pred_rand, average="macro", zero_division=0)), 4),
+        "recall_macro": round(float(recall_score(y_test, y_pred_rand, average="macro", zero_division=0)), 4),
+    }
+
+    return results
+
+
+def _build_labeled_dataset(
+    horizon: str,
+    label_mode: str = "volatility_scaled",
+    k: float = DEFAULT_VOLATILITY_K,
+    floor: float = DEFAULT_THRESHOLD_FLOOR,
+    cap: float = DEFAULT_THRESHOLD_CAP,
+    fixed_threshold: float = RETURN_THRESHOLD,
+    use_excess_return: bool = True,
+    benchmark_ticker: str = "^NSEI",
+) -> Optional[Tuple[Any, Dict[str, int], Dict[str, int]]]:
     """
     Join analysis + stock_price to build a labeled feature matrix.
     Enforces strict point-in-time feature construction with zero data leakage:
     1. Historical reactions are computed strictly from events realized prior to the article timestamp.
-    2. Recency/session timing is strictly based on the publication timestamp without wall-clock bias.
-    3. Records are ordered chronologically by publication time.
+    2. Benchmark-relative (excess) returns: stock return minus ^NSEI return over the same trading-day alignment.
+       Falls back to raw return if benchmark data is missing, flagging benchmark_missing.
+    3. Volatility-scaled threshold: k * 20-day historical volatility (with floor & cap), or fixed mode.
+    4. Records are ordered chronologically by publication time.
     """
     if not (HAS_PANDAS and HAS_SKLEARN):
         return None
@@ -306,13 +572,14 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
     if not rows:
         return None
 
+    cache = get_price_cache()
+
     event_types = sorted(list({r["event_type"] or "OTHER" for r in rows}))
     sectors = sorted(list({r["sector"] or "Broad Market" for r in rows}))
     event_enc = {e: i for i, e in enumerate(event_types)}
     sector_enc = {s: i for i, s in enumerate(sectors)}
 
     # Point-in-time category reaction tracker (Zero Leakage)
-    # Only events whose future return period completed on or before current pub_dt are added
     cat_return_sum = defaultdict(float)
     cat_return_count = defaultdict(int)
     pending_realizations = []  # list of (realization_date_str, category, return_pct)
@@ -324,21 +591,29 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
         if not pub_dt:
             continue
 
-        # Determine actual future return for the specified horizon
-        actual_ret = None
-        if horizon == "1d":
-            actual_ret = r["forward_return_1d"]
-        elif horizon == "3d":
-            actual_ret = r["forward_return_3d"]
-        elif horizon == "5d":
-            actual_ret = r["forward_return_5d"]
+        # Look up stock & benchmark returns aligned on trading days
+        ret_info = compute_excess_return(ticker, pub_dt, n_days, benchmark_ticker=benchmark_ticker, cache=cache)
+        raw_ret = ret_info["stock_return"]
+        bench_ret = ret_info["benchmark_return"]
+        excess_ret = ret_info["excess_return"]
+        bench_missing = ret_info["benchmark_missing"]
 
-        # If not already present in column, attempt lookup in stock_price OHLCV
-        if actual_ret is None:
-            _, _, actual_ret = _get_future_return(ticker, pub_dt, n_days)
+        # If price cache lookup yielded None, check if analysis table had raw forward return
+        if raw_ret is None:
+            if horizon == "1d":
+                raw_ret = r["forward_return_1d"]
+            elif horizon == "3d":
+                raw_ret = r["forward_return_3d"]
+            elif horizon == "5d":
+                raw_ret = r["forward_return_5d"]
+            if raw_ret is not None:
+                excess_ret = raw_ret
+                bench_missing = True
 
-        if actual_ret is None:
+        if raw_ret is None:
             continue  # Future return not yet realized / unavailable for this horizon
+
+        chosen_ret = excess_ret if (use_excess_return and excess_ret is not None) else raw_ret
 
         # Point-in-Time update: realize past events that completed prior to current pub_dt
         new_pending = []
@@ -361,13 +636,29 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
         try:
             pub_date_obj = datetime.strptime(pub_dt, "%Y-%m-%d")
             completion_dt = (pub_date_obj + timedelta(days=n_days + 1)).strftime("%Y-%m-%d")
-            pending_realizations.append((completion_dt, cat, actual_ret))
+            pending_realizations.append((completion_dt, cat, chosen_ret))
         except Exception:
             pass
 
-        label = _return_to_class(actual_ret)
         stock_feats = _get_stock_features(ticker, pub_dt)
         mkt_trend = _get_market_trend(pub_dt)
+        hist_vol = stock_feats["historical_volatility"]
+
+        threshold_applied = (
+            compute_volatility_threshold(hist_vol, k=k, floor=floor, cap=cap, default_threshold=fixed_threshold)
+            if label_mode == "volatility_scaled"
+            else fixed_threshold
+        )
+
+        label = return_to_class(
+            chosen_ret,
+            volatility=hist_vol,
+            mode=label_mode,
+            k=k,
+            floor=floor,
+            cap=cap,
+            fixed_threshold=fixed_threshold
+        )
 
         # Point-in-time session timing (hour in day normalized: 09:15 -> ~0.385)
         raw_pub = str(r["published_at"])
@@ -393,7 +684,7 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
             float(event_enc.get(r["event_type"] or "OTHER", 0)),
             float(sector_enc.get(r["sector"] or "Broad Market", 0)),
             stock_feats["recent_return_1d"],
-            stock_feats["historical_volatility"],
+            hist_vol,
             stock_feats["volume_norm"],
             mkt_trend,
             hist_cat_reaction,
@@ -410,7 +701,14 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
             "sector": r["sector"],
             "event_type": r["event_type"],
             "published_at": pub_dt,
-            "actual_return": actual_ret,
+            "actual_return": chosen_ret,
+            "raw_return": raw_ret,
+            "benchmark_return": bench_ret,
+            "excess_return": excess_ret,
+            "benchmark_missing": bench_missing,
+            "volatility": hist_vol,
+            "threshold_applied": threshold_applied,
+            "sentiment_score": sent_score,
         })
 
     if not records:
@@ -418,6 +716,7 @@ def _build_labeled_dataset(horizon: str) -> Optional[Tuple[Any, Dict[str, int], 
 
     df = pd.DataFrame(records)
     df["X"] = df["features"]
+    df["sentiment_score"] = [rec["sentiment_score"] for rec in records]
     return df, event_enc, sector_enc
 
 
@@ -563,14 +862,24 @@ MODELS = {
 
 def train_all(
     on_progress: Optional[Callable[[int, int, str, str], None]] = None,
-    is_cancelled: Optional[Callable[[], bool]] = None
+    is_cancelled: Optional[Callable[[], bool]] = None,
+    label_mode: str = "volatility_scaled",
+    k: float = DEFAULT_VOLATILITY_K,
+    floor: float = DEFAULT_THRESHOLD_FLOOR,
+    cap: float = DEFAULT_THRESHOLD_CAP,
+    use_excess_return: bool = True,
+    fixed_threshold: float = RETURN_THRESHOLD,
+    benchmark_ticker: str = "^NSEI",
 ) -> Dict[str, Any]:
     """
     Train all 3 models × 3 horizons (9 total models).
-    Enforces strict time-aware evaluation:
+    Enforces strict time-aware evaluation and honest baselines:
+    - Benchmark-relative excess returns against ^NSEI over identical trading days.
+    - Volatility-scaled labeling threshold (or fixed mode via config).
     - Chronological 80/20 train/test split (no future data mixed into training).
-    - Walk-Forward Expanding-Window TimeSeriesSplit on training data.
-    - True out-of-sample forward evaluation on held-out test data.
+    - Baselines evaluated on identical test set: majority class, sentiment sign, random stratified.
+    - Headline metrics: Balanced Accuracy & Macro F1.
+    - Small-sample reporting safeguard: requires n_test >= 200.
     """
     if not (HAS_PANDAS and HAS_SKLEARN):
         return {"error": "pandas or scikit-learn not installed."}
@@ -591,7 +900,17 @@ def train_all(
         if is_cancelled and is_cancelled():
             return results
 
-        dataset = _build_labeled_dataset(horizon)
+        dataset = _build_labeled_dataset(
+            horizon,
+            label_mode=label_mode,
+            k=k,
+            floor=floor,
+            cap=cap,
+            fixed_threshold=fixed_threshold,
+            use_excess_return=use_excess_return,
+            benchmark_ticker=benchmark_ticker
+        )
+
         if dataset is None:
             for model_name in MODELS:
                 current_step += 1
@@ -624,6 +943,34 @@ def train_all(
         split_idx = int(n_total * 0.8)
         X_train, y_train = X[:split_idx], y[:split_idx]
         X_test, y_test   = X[split_idx:], y[split_idx:]
+        n_train, n_test  = len(X_train), len(X_test)
+
+        # Safeguard: Never present metrics when n_test < 200
+        if n_test < MIN_TEST_SAMPLES:
+            msg = f"Insufficient test samples (n_test={n_test} < {MIN_TEST_SAMPLES}). Need >= {MIN_TEST_SAMPLES} held-out test samples for defensible evaluation."
+            logger.warning("[ML] %s horizon: %s", horizon, msg)
+            for model_name in MODELS:
+                current_step += 1
+                if on_progress:
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", msg)
+                _store_insufficient(model_name, horizon, msg, n_train=n_train, n_test=n_test)
+                results[f"{model_name}_{horizon}"] = {
+                    "insufficient": True,
+                    "n_train": n_train,
+                    "n_test": n_test,
+                    "horizon": horizon,
+                    "message": "insufficient data"
+                }
+            continue
+
+        # Evaluate honest baselines on held-out test data
+        sentiment_scores_test = np.array(df["sentiment_score"].iloc[split_idx:].tolist())
+        baseline_results = evaluate_baselines(
+            y_train=y_train,
+            y_test=y_test,
+            sentiment_scores_test=sentiment_scores_test,
+            random_state=42
+        )
 
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
@@ -641,11 +988,12 @@ def train_all(
                 model.fit(X_train_s, y_train)
                 y_pred = model.predict(X_test_s)
 
-                acc  = round(float(accuracy_score(y_test, y_pred)), 4)
-                prec = round(float(precision_score(y_test, y_pred, average="macro", zero_division=0)), 4)
-                rec  = round(float(recall_score(y_test, y_pred, average="macro", zero_division=0)), 4)
-                f1   = round(float(f1_score(y_test, y_pred, average="macro", zero_division=0)), 4)
-                cm   = confusion_matrix(y_test, y_pred, labels=CLASS_LABELS).tolist()
+                acc     = round(float(accuracy_score(y_test, y_pred)), 4)
+                bal_acc = round(float(balanced_accuracy_score(y_test, y_pred)), 4)
+                prec    = round(float(precision_score(y_test, y_pred, average="macro", zero_division=0)), 4)
+                rec     = round(float(recall_score(y_test, y_pred, average="macro", zero_division=0)), 4)
+                f1      = round(float(f1_score(y_test, y_pred, average="macro", zero_division=0)), 4)
+                cm      = confusion_matrix(y_test, y_pred, labels=CLASS_LABELS).tolist()
 
                 # Feature importances (RF & GB)
                 fi = None
@@ -680,38 +1028,66 @@ def train_all(
                     "sector_enc": sector_enc,
                     "feature_names": FEATURE_NAMES,
                     "class_labels": CLASS_LABELS,
+                    "balanced_accuracy": bal_acc,
+                    "f1_macro": f1,
+                    "accuracy": acc,
+                    "baseline_metrics": baseline_results,
                     "cv_acc_mean": cv_acc_mean,
                     "cv_acc_std": cv_acc_std,
                     "cv_f1_mean": cv_f1_mean,
                     "n_folds": n_splits if cv_acc_mean is not None else None,
+                    "label_mode": label_mode,
+                    "volatility_k": k,
+                    "use_excess_return": use_excess_return,
                 }, model_path)
 
                 _store_metric(
-                    model_name=model_name, horizon=horizon,
-                    n_train=len(X_train), n_test=len(X_test),
-                    accuracy=acc, precision=prec, recall=rec, f1=f1,
-                    cm=cm, fi=fi, model_path=model_path,
-                    cv_acc_mean=cv_acc_mean, cv_acc_std=cv_acc_std, cv_f1_mean=cv_f1_mean,
+                    model_name=model_name,
+                    horizon=horizon,
+                    n_train=len(X_train),
+                    n_test=len(X_test),
+                    accuracy=acc,
+                    balanced_accuracy=bal_acc,
+                    precision=prec,
+                    recall=rec,
+                    f1=f1,
+                    cm=cm,
+                    fi=fi,
+                    model_path=model_path,
+                    baseline_metrics=baseline_results,
+                    cv_acc_mean=cv_acc_mean,
+                    cv_acc_std=cv_acc_std,
+                    cv_f1_mean=cv_f1_mean,
+                    label_mode=label_mode,
+                    volatility_k=k,
+                    use_excess_return=use_excess_return,
                 )
 
                 metric = {
                     "model": model_name, "horizon": horizon,
                     "n_train": len(X_train), "n_test": len(X_test),
-                    "accuracy": acc, "precision_macro": prec,
-                    "recall_macro": rec, "f1_macro": f1,
+                    "balanced_accuracy": bal_acc,    # Headline metric
+                    "f1_macro": f1,                  # Headline metric
+                    "accuracy": acc,                 # Raw accuracy
+                    "precision_macro": prec,
+                    "recall_macro": rec,
                     "confusion_matrix": cm,
                     "feature_importances": fi,
+                    "baselines": baseline_results,
                     "cv_accuracy_mean": cv_acc_mean,
                     "cv_accuracy_std": cv_acc_std,
                     "cv_f1_mean": cv_f1_mean,
                     "insufficient": False,
+                    "label_mode": label_mode,
+                    "volatility_k": k,
+                    "use_excess_return": use_excess_return,
                 }
                 results[f"{model_name}_{horizon}"] = metric
-                logger.info("[ML] %s %s → acc=%.3f f1=%.3f cv_acc=%.3f±%.3f",
-                           model_name, horizon, acc, f1,
-                           cv_acc_mean or 0, cv_acc_std or 0)
+                logger.info("[ML] %s %s → bal_acc=%.3f f1=%.3f raw_acc=%.3f (n_train=%d, n_test=%d)",
+                            model_name, horizon, bal_acc, f1, acc, len(X_train), len(X_test))
                 if on_progress:
-                    on_progress(current_step, total_steps, f"{model_name}_{horizon}", f"Done {model_name} ({horizon}): Out-of-sample Acc={acc*100:.1f}%, Walk-Forward Acc={(cv_acc_mean or 0)*100:.1f}%")
+                    on_progress(current_step, total_steps, f"{model_name}_{horizon}",
+                                f"Done {model_name} ({horizon}): Bal Acc={bal_acc*100:.1f}%, Macro F1={f1*100:.1f}%")
 
             except Exception as e:
                 logger.error("[ML] %s %s training error: %s", model_name, horizon, e)
@@ -731,42 +1107,68 @@ def train_all(
     return results
 
 
-def _store_metric(model_name, horizon, n_train, n_test, accuracy, precision,
-                  recall, f1, cm, fi, model_path,
-                  cv_acc_mean=None, cv_acc_std=None, cv_f1_mean=None):
+def _store_metric(
+    model_name: str,
+    horizon: str,
+    n_train: int,
+    n_test: int,
+    accuracy: float,
+    precision: float,
+    recall: float,
+    f1: float,
+    cm: list,
+    fi: Optional[list],
+    model_path: str,
+    balanced_accuracy: Optional[float] = None,
+    baseline_metrics: Optional[Dict[str, Any]] = None,
+    cv_acc_mean: Optional[float] = None,
+    cv_acc_std: Optional[float] = None,
+    cv_f1_mean: Optional[float] = None,
+    label_mode: str = "volatility_scaled",
+    volatility_k: float = DEFAULT_VOLATILITY_K,
+    use_excess_return: bool = True,
+):
     conn = get_connection()
-    # Add CV columns to notes JSON for storage since schema is fixed
-    notes_data = {}
+    notes_data = {
+        "label_mode": label_mode,
+        "volatility_k": volatility_k,
+        "use_excess_return": use_excess_return,
+    }
     if cv_acc_mean is not None:
         notes_data["cv_accuracy_mean"] = cv_acc_mean
         notes_data["cv_accuracy_std"] = cv_acc_std
         notes_data["cv_f1_mean"] = cv_f1_mean
+
+    is_suff = 1 if (n_test is not None and n_test >= MIN_TEST_SAMPLES) else 0
+
     conn.execute("""
         INSERT OR REPLACE INTO model_metric
         (model_name, horizon, trained_at, n_train, n_test,
-         accuracy, precision_macro, recall_macro, f1_macro,
+         accuracy, balanced_accuracy, precision_macro, recall_macro, f1_macro,
          confusion_matrix, feature_names, feature_importances,
-         class_labels, is_sufficient, model_path, notes)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)
+         class_labels, baseline_metrics, is_sufficient, model_path, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         model_name, horizon, datetime.now().isoformat(),
-        n_train, n_test, accuracy, precision, recall, f1,
+        n_train, n_test, accuracy, balanced_accuracy, precision, recall, f1,
         json.dumps(cm), json.dumps(FEATURE_NAMES),
         json.dumps(fi) if fi else None,
-        json.dumps(CLASS_LABELS), model_path,
-        json.dumps(notes_data) if notes_data else None,
+        json.dumps(CLASS_LABELS),
+        json.dumps(baseline_metrics) if baseline_metrics else None,
+        is_suff, model_path,
+        json.dumps(notes_data),
     ))
     conn.commit()
     conn.close()
 
 
-def _store_insufficient(model_name, horizon, notes):
+def _store_insufficient(model_name: str, horizon: str, notes: str, n_train: int = 0, n_test: int = 0):
     conn = get_connection()
     conn.execute("""
         INSERT OR REPLACE INTO model_metric
-        (model_name, horizon, trained_at, is_sufficient, notes)
-        VALUES (?,?,?,0,?)
-    """, (model_name, horizon, datetime.now().isoformat(), notes))
+        (model_name, horizon, trained_at, n_train, n_test, is_sufficient, notes)
+        VALUES (?,?,?,?,?,0,?)
+    """, (model_name, horizon, datetime.now().isoformat(), n_train, n_test, notes))
     conn.commit()
     conn.close()
 
@@ -870,13 +1272,24 @@ def get_model_metrics() -> Dict[str, Any]:
         m["feature_importances"]   = json.loads(m["feature_importances"]) if m.get("feature_importances") else None
         m["feature_names"]         = json.loads(m["feature_names"]) if m.get("feature_names") else FEATURE_NAMES
         m["class_labels"]          = json.loads(m["class_labels"]) if m.get("class_labels") else CLASS_LABELS
-        # Parse CV metrics from notes JSON
+        m["baseline_metrics"]      = json.loads(m["baseline_metrics"]) if m.get("baseline_metrics") else None
+        if m.get("balanced_accuracy") is not None:
+            m["balanced_accuracy"] = round(float(m["balanced_accuracy"]), 4)
+
+        # Enforce MIN_TEST_SAMPLES safeguard: never present metrics if n_test < 200
+        if m.get("n_test") is not None and m["n_test"] < MIN_TEST_SAMPLES:
+            m["is_sufficient"] = 0
+
+        # Parse CV metrics and training parameters from notes JSON
         if m.get("notes"):
             try:
                 notes_data = json.loads(m["notes"])
-                m["cv_accuracy_mean"] = notes_data.get("cv_accuracy_mean")
-                m["cv_accuracy_std"]  = notes_data.get("cv_accuracy_std")
-                m["cv_f1_mean"]       = notes_data.get("cv_f1_mean")
+                m["cv_accuracy_mean"]  = notes_data.get("cv_accuracy_mean")
+                m["cv_accuracy_std"]   = notes_data.get("cv_accuracy_std")
+                m["cv_f1_mean"]        = notes_data.get("cv_f1_mean")
+                m["label_mode"]        = notes_data.get("label_mode", "volatility_scaled")
+                m["volatility_k"]      = notes_data.get("volatility_k", DEFAULT_VOLATILITY_K)
+                m["use_excess_return"] = notes_data.get("use_excess_return", True)
             except Exception:
                 pass
         if m.get("is_sufficient"):
@@ -898,6 +1311,7 @@ def get_model_metrics() -> Dict[str, Any]:
         "class_labels": CLASS_LABELS,
         "has_sufficient_data": has_sufficient,
         "min_samples_required": MIN_SAMPLES,
+        "min_test_samples": MIN_TEST_SAMPLES,
         "return_threshold_pct": RETURN_THRESHOLD,
         "compliance_disclaimer": "AI/model estimate — not investment advice.",
         "dataset_csv_available": os.path.exists(DATASET_CSV_PATH),
@@ -908,13 +1322,62 @@ def get_model_metrics() -> Dict[str, Any]:
     }
 
 
+def print_evaluation_table(results: Dict[str, Any]) -> str:
+    """
+    Format a clean, professional table of Model vs Baselines per Horizon,
+    with n_train, n_test, balanced accuracy, macro-F1, and accuracy.
+    """
+    lines = []
+    lines.append("=" * 110)
+    lines.append(f"{'HORIZON':<8} | {'CLASSIFIER / BASELINE':<26} | {'N_TRAIN':<8} | {'N_TEST':<8} | {'BAL_ACC':<9} | {'MACRO_F1':<9} | {'RAW_ACC':<9}")
+    lines.append("-" * 110)
+
+    horizons = ["1d", "3d", "5d"]
+    for h in horizons:
+        baseline_printed = False
+        for model_name in ["LogisticRegression", "RandomForest", "GradientBoosting"]:
+            key = f"{model_name}_{h}"
+            m = results.get(key, {})
+            if m.get("insufficient"):
+                n_tr = str(m.get("n_train", "—"))
+                n_te = str(m.get("n_test", "—"))
+                lines.append(f"{h:<8} | {model_name:<26} | {n_tr:<8} | {n_te:<8} | {'INSUFFICIENT DATA (< 200 samples)':<35}")
+                continue
+
+            if not baseline_printed and m.get("baselines"):
+                baselines = m["baselines"]
+                maj = baselines.get("majority_class", {})
+                sent = baselines.get("sentiment_sign", {})
+                rnd = baselines.get("random_stratified", {})
+
+                n_tr = str(m.get("n_train", "—"))
+                n_te = str(m.get("n_test", "—"))
+
+                if maj:
+                    lines.append(f"{h:<8} | {'[Baseline] Majority Class':<26} | {n_tr:<8} | {n_te:<8} | {maj.get('balanced_accuracy', 0)*100:>7.2f}% | {maj.get('f1_macro', 0)*100:>7.2f}% | {maj.get('accuracy', 0)*100:>7.2f}%")
+                if sent:
+                    lines.append(f"{'':<8} | {'[Baseline] Sentiment Sign':<26} | {n_tr:<8} | {n_te:<8} | {sent.get('balanced_accuracy', 0)*100:>7.2f}% | {sent.get('f1_macro', 0)*100:>7.2f}% | {sent.get('accuracy', 0)*100:>7.2f}%")
+                if rnd:
+                    lines.append(f"{'':<8} | {'[Baseline] Stratified Rand':<26} | {n_tr:<8} | {n_te:<8} | {rnd.get('balanced_accuracy', 0)*100:>7.2f}% | {rnd.get('f1_macro', 0)*100:>7.2f}% | {rnd.get('accuracy', 0)*100:>7.2f}%")
+                lines.append(f"{'':<8} | {'-'*26} | {'-'*8} | {'-'*8} | {'-'*9} | {'-'*9} | {'-'*9}")
+                baseline_printed = True
+
+            n_tr = str(m.get("n_train", "—"))
+            n_te = str(m.get("n_test", "—"))
+            bal = f"{m.get('balanced_accuracy', 0)*100:>7.2f}%" if m.get("balanced_accuracy") is not None else "—"
+            f1 = f"{m.get('f1_macro', 0)*100:>7.2f}%" if m.get("f1_macro") is not None else "—"
+            acc = f"{m.get('accuracy', 0)*100:>7.2f}%" if m.get("accuracy") is not None else "—"
+            lines.append(f"{h:<8} | {model_name:<26} | {n_tr:<8} | {n_te:<8} | {bal:>9} | {f1:>9} | {acc:>9}")
+
+        lines.append("-" * 110)
+
+    lines.append("=" * 110)
+    lines.append("AI/model estimate — not investment advice.")
+    table_str = "\n".join(lines)
+    return table_str
+
+
 if __name__ == "__main__":
-    print("Running ML training pipeline...")
+    print("Running ML training pipeline with Phase 1 enhancements...")
     results = train_all()
-    for k, v in results.items():
-        if v.get("insufficient"):
-            print(f"  {k}: INSUFFICIENT DATA — {v.get('message', '')}")
-        elif v.get("error"):
-            print(f"  {k}: ERROR — {v['error']}")
-        else:
-            print(f"  {k}: acc={v['accuracy']} prec={v['precision_macro']} rec={v['recall_macro']} f1={v['f1_macro']}")
+    print("\n" + print_evaluation_table(results))

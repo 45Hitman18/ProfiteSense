@@ -220,11 +220,55 @@ def classify_price_bracket(price: Optional[float], ticker: str = "") -> Tuple[st
     return cfg["id"], cfg["label"], cfg
 
 
+ALL_PRICE_BRACKETS = ["0-500", "500-1000", "1000+"]
+
+
+def get_signal_price_bracket(price: Optional[float], ticker: str = "") -> Tuple[str, str]:
+    """
+    Returns (bracket_key, bracket_label) tailored for Signals & Telegram:
+    - '0-500'    : ₹0 to ₹500 (label: '₹0 – ₹500')
+    - '500-1000' : ₹500 to ₹1,000 (label: '₹500 – ₹1,000')
+    - '1000+'    : Above ₹1,000 (label: '₹1,000+')
+    """
+    clean = (ticker or "").upper().strip()
+    if price is None or price <= 0:
+        if clean in STOCK_BASELINE_PRICES:
+            price = STOCK_BASELINE_PRICES[clean]
+        elif clean + ".NS" in STOCK_BASELINE_PRICES:
+            price = STOCK_BASELINE_PRICES[clean + ".NS"]
+        elif clean:
+            try:
+                conn = get_connection()
+                row = conn.execute("SELECT close FROM stock_price WHERE ticker=? ORDER BY date DESC LIMIT 1", (clean,)).fetchone()
+                conn.close()
+                if row and row["close"] is not None:
+                    price = float(row["close"])
+            except Exception:
+                price = None
+
+    if price is None or price <= 0:
+        return "0-500", "₹0 – ₹500"
+
+    if price <= 500.0:
+        return "0-500", "₹0 – ₹500"
+    elif price <= 1000.0:
+        return "500-1000", "₹500 – ₹1,000"
+    else:
+        return "1000+", "₹1,000+"
+
+
+_PRICE_INFO_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
 def get_stock_price_info(ticker: str, quote: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Determines share price, change pct, and price bracket for any ticker.
+    Uses in-memory cache to guarantee microsecond response times across large datasets.
     """
     clean = (ticker or "").upper().strip()
+    if not quote and clean in _PRICE_INFO_CACHE:
+        return _PRICE_INFO_CACHE[clean]
+
     price = None
     change_pct = 0.0
 
@@ -236,7 +280,7 @@ def get_stock_price_info(ticker: str, quote: Optional[Dict[str, Any]] = None) ->
             price = STOCK_BASELINE_PRICES[clean]
         elif clean + ".NS" in STOCK_BASELINE_PRICES:
             price = STOCK_BASELINE_PRICES[clean + ".NS"]
-        else:
+        elif clean:
             try:
                 conn = get_connection()
                 row = conn.execute("SELECT close FROM stock_price WHERE ticker=? ORDER BY date DESC LIMIT 1", (clean,)).fetchone()
@@ -247,7 +291,7 @@ def get_stock_price_info(ticker: str, quote: Optional[Dict[str, Any]] = None) ->
                 pass
 
     bracket_id, bracket_label, cfg = classify_price_bracket(price, clean)
-    return {
+    info = {
         "ticker": clean,
         "price": round(price, 2) if price else None,
         "change_pct": round(change_pct, 2),
@@ -257,3 +301,6 @@ def get_stock_price_info(ticker: str, quote: Optional[Dict[str, Any]] = None) ->
         "bracket_bg": cfg["bg"],
         "bracket_border": cfg["border"]
     }
+    if not quote:
+        _PRICE_INFO_CACHE[clean] = info
+    return info

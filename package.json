@@ -4,7 +4,7 @@
   "private": true,
   "description": "ProfitSense Market News AI — Unified runner for Backend (FastAPI) and Frontend (Vite)",
   "scripts": {
-    "dev": "concurrently --kill-others -n \"backend,frontend\" -c \"magenta.bold,cyan.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently --kill-others-on-fail -n \"backend,frontend\" -c \"magenta.bold,cyan.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "start": "npm run dev",
     "dev:backend": "cd backend && python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
     "dev:frontend": "cd frontend && npm run dev",

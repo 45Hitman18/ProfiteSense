@@ -1,6 +1,7 @@
 import feedparser
 import hashlib
 import re
+import requests
 from datetime import datetime
 from typing import List, Dict, Any
 from bs4 import BeautifulSoup
@@ -83,19 +84,36 @@ class RSSNewsProvider(BaseNewsProvider):
     def _parse_date(self, entry) -> str:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
             try:
-                return datetime(*entry.published_parsed[:6]).isoformat()
+                return datetime(*entry.published_parsed[:6]).strftime("%Y-%m-%dT%H:%M:%SZ")
             except Exception:
                 pass
         if hasattr(entry, "published"):
-            return str(entry.published)
-        return datetime.now().isoformat()
+            try:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(entry.published)
+                return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            except Exception:
+                pass
+            try:
+                from dateutil import parser as dt_parser
+                return dt_parser.parse(str(entry.published)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            except Exception:
+                pass
+        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def fetch_latest_news(self, limit: int = 30) -> List[Dict[str, Any]]:
+    def fetch_latest_news(self, limit: int = 60) -> List[Dict[str, Any]]:
         articles = []
         for feed_info in self.FEEDS:
             try:
-                parsed = feedparser.parse(feed_info["url"], agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) MarketNewsAI/2.0")
-                for entry in parsed.entries[:15]:
+                resp = requests.get(
+                    feed_info["url"],
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MarketNewsAI/2.0"},
+                    timeout=5,
+                )
+                if resp.status_code != 200:
+                    continue
+                parsed = feedparser.parse(resp.content)
+                for entry in parsed.entries[:25]:
                     title = self._clean_html(getattr(entry, "title", "")).strip()
                     if not title or len(title) < 10:
                         continue
@@ -117,9 +135,11 @@ class RSSNewsProvider(BaseNewsProvider):
                         "published_at": pub_date,
                         "category": feed_info["category"],
                         "raw_content": raw_content,
-                        "created_at": datetime.now().isoformat()
+                        "created_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                     })
             except Exception as e:
                 print(f"RSS Provider warning for {feed_info['name']}: {e}")
                 
+        # Sort across all feeds so newest published items come first
+        articles.sort(key=lambda x: x["published_at"], reverse=True)
         return articles[:limit]

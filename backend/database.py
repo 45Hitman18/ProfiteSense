@@ -178,6 +178,7 @@ def init_db() -> None:
         n_train         INTEGER,
         n_test          INTEGER,
         accuracy        REAL,
+        balanced_accuracy REAL,
         precision_macro REAL,
         recall_macro    REAL,
         f1_macro        REAL,
@@ -185,6 +186,7 @@ def init_db() -> None:
         feature_names   TEXT,     -- JSON list
         feature_importances TEXT, -- JSON list (RF/GB only)
         class_labels    TEXT,     -- JSON list
+        baseline_metrics TEXT,    -- JSON baselines (majority, sentiment, random)
         is_sufficient   INTEGER DEFAULT 1,   -- 0 = "insufficient data" flag
         model_path      TEXT,
         notes           TEXT,
@@ -282,6 +284,56 @@ def init_db() -> None:
     )
     """)
 
+    # ── Telegram Alerts Integration ──────────────────────────────
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_chats (
+        chat_id         TEXT PRIMARY KEY,
+        username        TEXT,
+        created_at      TEXT DEFAULT (datetime('now')),
+        is_active       INTEGER DEFAULT 1,
+        muted_until     TEXT,
+        quiet_start     TEXT,
+        quiet_end       TEXT,
+        min_confidence  REAL DEFAULT 0.6,
+        min_impact      TEXT DEFAULT 'HIGH',
+        directions      TEXT DEFAULT '["BULLISH","BEARISH"]',
+        watchlist_only  INTEGER DEFAULT 0,
+        price_brackets  TEXT DEFAULT '["0-500","500-1000","1000+"]',
+        digest_enabled  INTEGER DEFAULT 1,
+        digest_time     TEXT DEFAULT '18:30'
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_link_codes (
+        code            TEXT PRIMARY KEY,
+        created_at      TEXT DEFAULT (datetime('now')),
+        expires_at      TEXT NOT NULL,
+        used            INTEGER DEFAULT 0
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_alert_log (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id         TEXT NOT NULL,
+        article_id      TEXT NOT NULL,
+        ticker          TEXT NOT NULL,
+        sent_at         TEXT DEFAULT (datetime('now')),
+        status          TEXT NOT NULL,
+        error           TEXT,
+        UNIQUE(chat_id, article_id, ticker)
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_state (
+        key             TEXT PRIMARY KEY,
+        value           TEXT,
+        updated_at      TEXT DEFAULT (datetime('now'))
+    )
+    """)
+
     # ── Safe column migrations for existing DBs ───────────────────
     _add_cols(cur, "analysis", [
         ("beta",                  "REAL"),
@@ -335,6 +387,33 @@ def init_db() -> None:
         ("outcome_1d",    "TEXT"),
         ("outcome_3d",    "TEXT"),
         ("outcome_5d",    "TEXT"),
+    ])
+    _add_cols(cur, "model_metric", [
+        ("balanced_accuracy", "REAL"),
+        ("baseline_metrics",  "TEXT"),
+    ])
+    _add_cols(cur, "analysis", [
+        ("benchmark_return_1d", "REAL"),
+        ("benchmark_return_3d", "REAL"),
+        ("benchmark_return_5d", "REAL"),
+        ("excess_return_1d",    "REAL"),
+        ("excess_return_3d",    "REAL"),
+        ("excess_return_5d",    "REAL"),
+        ("benchmark_missing",   "INTEGER"),
+    ])
+    _add_cols(cur, "telegram_chats", [
+        ("username",        "TEXT"),
+        ("is_active",       "INTEGER"),
+        ("muted_until",     "TEXT"),
+        ("quiet_start",     "TEXT"),
+        ("quiet_end",       "TEXT"),
+        ("min_confidence",  "REAL"),
+        ("min_impact",      "TEXT"),
+        ("directions",      "TEXT"),
+        ("watchlist_only",  "INTEGER"),
+        ("price_brackets",  "TEXT DEFAULT '[\"0-500\",\"500-1000\",\"1000+\"]'"),
+        ("digest_enabled",  "INTEGER"),
+        ("digest_time",     "TEXT"),
     ])
 
     conn.commit()
@@ -390,6 +469,177 @@ def save_analysis(article_id: str, result: dict, conn: Optional[sqlite3.Connecti
     if close_after:
         conn.close()
     return analysis_id
+
+
+# ══════════════════════════════════════════════════════════════════
+# TELEGRAM DB HELPERS
+# ══════════════════════════════════════════════════════════════════
+def deactivate_telegram_chat(chat_id: str, conn: Optional[sqlite3.Connection] = None) -> None:
+    """Mark a chat as inactive (e.g. after 403 Forbidden / bot blocked)."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        conn.execute("UPDATE telegram_chats SET is_active = 0 WHERE chat_id = ?", (str(chat_id),))
+        conn.commit()
+    finally:
+        if close_after:
+            conn.close()
+
+
+def _normalize_alert_ticker(ticker: str) -> str:
+    t = str(ticker or "").strip().upper()
+    for ext in (".NS", ".BO"):
+        if t.endswith(ext):
+            t = t[:-len(ext)]
+    return t
+
+
+
+def record_telegram_alert(
+    chat_id: str,
+    article_id: str,
+    ticker: str,
+    status: str = "SENT",
+    error: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None
+) -> bool:
+    """
+    Record an alert delivery attempt into telegram_alert_log.
+    Returns True if inserted, False if a unique constraint prevented duplicate insertion.
+    """
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        norm_ticker = _normalize_alert_ticker(ticker)
+        conn.execute("""
+            INSERT INTO telegram_alert_log (chat_id, article_id, ticker, status, error)
+            VALUES (?, ?, ?, ?, ?)
+        """, (str(chat_id), str(article_id), norm_ticker, status, error))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        if close_after:
+            conn.close()
+
+
+def is_telegram_alert_sent(
+    chat_id: str,
+    article_id: str,
+    ticker: str,
+    conn: Optional[sqlite3.Connection] = None
+) -> bool:
+    """Check if an alert was already logged for this (chat_id, article_id, ticker)."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        norm_ticker = _normalize_alert_ticker(ticker)
+        cur = conn.execute("""
+            SELECT 1 FROM telegram_alert_log
+            WHERE chat_id = ? AND article_id = ? AND ticker = ?
+            LIMIT 1
+        """, (str(chat_id), str(article_id), norm_ticker))
+        return cur.fetchone() is not None
+    finally:
+        if close_after:
+            conn.close()
+
+
+
+def count_recent_telegram_alerts(
+    chat_id: str,
+    minutes: int = 60,
+    conn: Optional[sqlite3.Connection] = None
+) -> int:
+    """Count number of alerts sent to chat_id within the last `minutes` (default 60)."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        cur = conn.execute("""
+            SELECT COUNT(*) FROM telegram_alert_log
+            WHERE chat_id = ? AND status = 'SENT'
+              AND sent_at >= datetime('now', '-' || ? || ' minutes')
+        """, (str(chat_id), int(minutes)))
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        if close_after:
+            conn.close()
+
+
+
+def get_telegram_chat(chat_id: str, conn: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve chat record by chat_id."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        cur = conn.execute("SELECT * FROM telegram_chats WHERE chat_id = ?", (str(chat_id),))
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        if close_after:
+            conn.close()
+
+
+def list_telegram_chats(active_only: bool = False, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
+    """List all registered telegram chats."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        query = "SELECT * FROM telegram_chats"
+        if active_only:
+            query += " WHERE is_active = 1"
+        query += " ORDER BY created_at ASC"
+        cur = conn.execute(query)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        if close_after:
+            conn.close()
+
+
+def get_telegram_state(key: str, default: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> Optional[str]:
+    """Retrieve arbitrary state value from telegram_state."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        cur = conn.execute("SELECT value FROM telegram_state WHERE key = ?", (key,))
+        row = cur.fetchone()
+        return row[0] if row else default
+    finally:
+        if close_after:
+            conn.close()
+
+
+def set_telegram_state(key: str, value: str, conn: Optional[sqlite3.Connection] = None) -> None:
+    """Set or update state value in telegram_state."""
+    close_after = False
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+    try:
+        conn.execute("""
+            INSERT OR REPLACE INTO telegram_state (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+        """, (key, str(value)))
+        conn.commit()
+    finally:
+        if close_after:
+            conn.close()
 
 
 if __name__ == "__main__":

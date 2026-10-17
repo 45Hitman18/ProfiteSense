@@ -93,7 +93,7 @@ INDIAN_STOCKS_DATA = [
     {"ticker": "TATAPOWER.NS", "symbol": "TATAPOWER", "name": "Tata Power Company Ltd", "aliases": ["Tata Power", "Solar", "EV Charging", "Renewable"], "sector": "Power & Utilities"},
     {"ticker": "PAYTM.NS", "symbol": "PAYTM", "name": "One97 Communications Ltd (Paytm)", "aliases": ["Paytm", "One97", "Vijay Shekhar Sharma", "Fintech"], "sector": "Fintech"},
     {"ticker": "POLICYBZR.NS", "symbol": "POLICYBZR", "name": "PB Fintech Ltd (PolicyBazaar)", "aliases": ["PolicyBazaar", "PB Fintech", "PaisaBazaar"], "sector": "Fintech / Insurance"},
-    {"ticker": "DELHIVERY.NS", "symbol": "DELHIVERY", "name": "Delhivery Ltd", "aliases": ["Delhivery", "Logistics", "E-commerce Delivery"], "sector": "Logistics & Supply Chain"},
+    {"ticker": "DELHIVERY.NS", "symbol": "DELHIVERY", "name": "Delhivery Ltd", "aliases": ["Delhivery", "Delhivery Logistics"], "sector": "Logistics & Supply Chain"},
     {"ticker": "NYKAA.NS", "symbol": "NYKAA", "name": "FSN E-Commerce Ventures (Nykaa)", "aliases": ["Nykaa", "Falguni Nayar", "Beauty", "Cosmetics"], "sector": "E-Commerce & Retail"},
     {"ticker": "IDFCFIRSTB.NS", "symbol": "IDFCFIRSTB", "name": "IDFC First Bank Ltd", "aliases": ["IDFC First", "IDFC Bank", "V Vaidyanathan"], "sector": "Banking & Finance"},
     {"ticker": "FEDERALBNK.NS", "symbol": "FEDERALBNK", "name": "Federal Bank Ltd", "aliases": ["Federal Bank", "Kerala Bank"], "sector": "Banking & Finance"},

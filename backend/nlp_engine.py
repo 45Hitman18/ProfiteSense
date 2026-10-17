@@ -516,6 +516,9 @@ def extract_entities(text: str) -> List[Dict[str, Any]]:
 
     # ── Pass 1: explicit $TICKER notation ──────────────────────
     for raw in re.findall(r'\$([A-Za-z0-9\.\^]{1,12})\b', text):
+        # Ignore price amounts like $200, $190, $135.50
+        if raw.replace('.', '').isdigit():
+            continue
         sym = raw.upper()
         if sym in seen_tickers:
             continue

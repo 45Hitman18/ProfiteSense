@@ -336,6 +336,92 @@ The platform provides a consolidated dataset exporting all articles, extracted m
 - **Watchlist**: Track custom tickers with live quotes, daily change %, and local browser persistence.
 - **ML Models**: Interactive ML evaluation dashboard with confusion matrices, Gini feature importances, and dataset CSV download.
 - **Settings**: System health check, cache statistics, API quota audit, background scheduler status, and local browser notification alert permissions.
+- **Telegram Alerts**: Secure chat pairing, single-use 10-minute linking codes, QR codes, live preference management (impact levels, confidence thresholds, quiet hours, evening digests), and test message dispatching.
+
+---
+
+## 📱 Telegram Alerts & Mobile Intelligence Engine
+
+ProfitSense includes a zero-cost, real-time Telegram alert delivery pipeline powered by the official Telegram Bot API (created via `@BotFather`). It delivers high-impact catalysts, watchlist alerts, model predictions, and evening market digests directly to your mobile device or desktop.
+
+### 🌟 Key Capabilities
+- **Instant Catalyst Signals**: Real-time push notifications for breaking high-impact news on Indian equities (NSE/BSE).
+- **Directional ML Outlook**: Displays 1D and 3D predictive direction outlook (`Positive` / `Negative` / `Neutral`) trained on empirical financial data.
+- **Actionable Inline Buttons**: Every alert includes dynamic Telegram inline keyboard buttons:
+  - `[ 📊 Open in ProfitSense ]` — Deep-links straight to the article analysis in the web app.
+  - `[ 🔕 Mute 2h ]` — Instantly suppresses alerts for 2 hours with one tap.
+  - `[ ❌ Unwatch <TICKER> ]` — Immediately removes the stock from your watchlist.
+- **Evening Daily Digest**: Automated market recap scheduled at **18:30 IST** (post-market close), featuring market pulse statistics (bullish/bearish ratios), top catalyst highlights, and watchlist performance.
+- **Intelligent Filtering**:
+  - **Quiet Hours**: Define custom do-not-disturb periods in Indian Standard Time (IST) that cleanly handle midnight crossings (e.g., `22:00` to `07:00`).
+  - **Mute Timer**: Temporarily pause notifications for custom durations (`/mute 30m`, `/mute 2h`, `/mute 1d`).
+  - **Stale News Skip**: Automatically drops news published $>6$ hours ago to prevent notification floods on restart.
+  - **Hourly Rate Cap**: Strict ceiling of **10 alerts per rolling hour per chat** to eliminate notification fatigue.
+  - **Deduplication**: Enforces strict `(chat_id, article_id, ticker)` uniqueness to guarantee zero repeat alerts.
+- **Zero Token Leakage**: Your bot token resides exclusively in `.env`, is redacted from logs/URLs, and is never returned in any API response.
+- **Mandatory Compliance**: Every single alert, digest, and bot reply ends with the non-negotiable label:
+  > *AI/model estimate — not investment advice.*
+
+---
+
+### 🚀 Step-by-Step Setup Guide
+
+#### Step 1: Create a Free Telegram Bot
+1. Open Telegram and search for the official [@BotFather](https://t.me/BotFather).
+2. Send `/newbot` and follow the prompts to choose a display name and username (e.g. `MyProfitSenseAlertsBot`).
+3. `@BotFather` will generate an HTTP API token (formatted like `123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`).
+
+#### Step 2: Configure Environment Variables
+Open your `.env` file in the project root and add:
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+TELEGRAM_ENABLED=true
+TELEGRAM_POLL_INTERVAL=2.0
+APP_BASE_URL=http://localhost:5173
+```
+*(Optional: set `ADMIN_API_KEY=your_secret_key` to restrict web settings modifications, or set `TELEGRAM_ALLOWED_CHAT_IDS=123456789` to restrict access to specific Telegram chat IDs).*
+
+#### Step 3: Link Your Chat Securely
+1. Launch ProfitSense (`npm run dev` in frontend, `uvicorn main:app` in backend).
+2. Open your browser to **Settings → Telegram alerts**.
+3. Click **Generate Connect Link & QR**.
+4. A single-use 10-minute code and deep link `https://t.me/<bot>?start=<code>` will be displayed alongside a scannable QR code.
+5. Tap the link on your phone or scan the QR code with your camera.
+6. In Telegram, tap **START**. Your chat will instantly connect and receive confirmation with your default alert preferences!
+
+---
+
+### 💬 Interactive In-Chat Bot Commands
+
+You can control your alert preferences directly from Telegram at any time:
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| `<SHARE_NAME>` | **Easiest!** Simply type any Indian share name to get Current Price, 52W High, Loss & Range | `RELIANCE` or `TCS` or `TATAMOTORS` |
+| `/p <TICKER>` | Get Current Price, 52W High, Loss from Peak & 52W Range gauge | `/p RELIANCE` or `/p INFY` |
+| `/signals` | Top active AI market trade recommendations with target & stop loss | `/signals` or `/buy` |
+| `/w <TICKER>` | Quick-add stock to your watchlist | `/w RELIANCE` |
+| `/uw <TICKER>` | Quick-remove stock from your watchlist | `/uw TCS` |
+| `/status` | Inspect active alert preferences, quiet hours, and watchlist count | `/status` |
+| `/watch <TICKER>` | Add an Indian equity to your watchlist | `/watch RELIANCE` or `/watch TCS` |
+| `/unwatch <TICKER>` | Remove an equity from your watchlist | `/unwatch INFY` |
+| `/list` | List all actively tracked Indian equities in your watchlist | `/list` |
+| `/mute <duration>` | Temporarily silence alerts for `30m`, `2h`, `1d` | `/mute 2h` |
+| `/unmute` | Immediately cancel mute and resume notifications | `/unmute` |
+| `/minconf <percent>` | Set minimum model confidence filter (0–100%) | `/minconf 70` |
+| `/impact <level>` | Filter signals by event impact (`high`, `medium`, `all`) | `/impact high` |
+| `/digest <on\|off\|time>` | Schedule daily evening digest in 24-hr IST format | `/digest 18:30` |
+| `/quiet <start-end\|off>` | Configure quiet hours window crossing midnight | `/quiet 22:00-07:00` |
+| `/help` | Display interactive command guide and usage tips | `/help` |
+| `/stop` | Disconnect this chat and deactivate all alerts | `/stop` |
+
+---
+
+### 🛡️ Security, Privacy & Failure Tolerance
+1. **Zero Information Leakage**: Unlinked or unknown chats that send commands are ignored completely without replying, leaking zero information about the server or instance existence.
+2. **Crash-Proof Design**: All Telegram API requests are wrapped in resilient handlers with automatic retries on rate limits (`429`) and server errors (`5xx`), and non-retry on `400`/`403`. Network failures never block news ingestion or scheduler loops.
+3. **Bot Block / Delete Handling**: If a user blocks the bot or deletes a chat (`403 Forbidden`), the system automatically deactivates the chat record in SQLite to avoid wasteful future requests.
+4. **Token Redaction**: All error logs and exception messages pass through `redact_token()` to ensure the bot token is never exposed in terminal outputs or log files.
 
 ---
 
