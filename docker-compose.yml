@@ -19,9 +19,7 @@ services:
       - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
       - NEWSAPI_KEY=${NEWSAPI_KEY:-}
     volumes:
-      # Persistent volume for SQLite database so data survives container restarts
       - profitsense-data:/app/backend/data
-      # Optional: persist trained ML models
       - ./backend/models:/app/backend/models
 
 volumes:

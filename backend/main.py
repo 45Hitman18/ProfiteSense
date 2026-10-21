@@ -170,7 +170,7 @@ class WatchlistRequest(BaseModel):
 
 async def _periodic_news_sync():
     """Background task running every 20 minutes, respecting free-tier rate limits."""
-    await asyncio.sleep(15)  # Initial grace period
+    await asyncio.sleep(2)  # Fast 2s initial sync on startup
     while True:
         try:
             await asyncio.to_thread(sync_all_news)

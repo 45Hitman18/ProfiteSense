@@ -475,7 +475,7 @@ export default function ModelAnalyticsView() {
           {/* Action Toolbar */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <a
-              href="http://127.0.0.1:8000/api/ml/dataset/download"
+              href="/api/ml/dataset/download"
               download="market_news_ml_dataset.csv"
               className="btn btn-secondary btn-sm"
               style={{
